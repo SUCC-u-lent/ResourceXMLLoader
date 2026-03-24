@@ -1,0 +1,122 @@
+package org.resourcexmlloader;
+
+import org.resourcexmlloader.customloader.FieldClassCompiler;
+import org.resourcexmlloader.interfaces.XMLCompiler;
+
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.TransformerConfigurationException;
+import java.io.OutputStream;
+import java.lang.reflect.Constructor;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+/**
+ * The main accessor
+ */
+public class ResourceXML
+{
+    private ResourceXML(Builder builder)
+    {
+        this.resourcePath = builder.resourcePath;
+        this.outputStream = builder.outputStream;
+        this.generator = null;
+        if (builder.compilers != null)
+            this.generator = new XMLGenerator(this.resourcePath,this.outputStream,builder.compilers);
+    }
+    OutputStream outputStream;
+    Path resourcePath;
+    XMLGenerator generator;
+    public static class Builder
+    {
+        OutputStream outputStream;
+        Path resourcePath;
+        XMLCompiler[] compilers;
+        boolean useDefaultCompilers = true;
+        public Builder(){}
+        private boolean isCompiledEnviroment()
+        {
+            try
+            {
+                String location = Builder.class
+                        .getProtectionDomain()
+                        .getCodeSource()
+                        .getLocation()
+                        .getPath();
+
+                return location.endsWith(".jar");
+            }
+            catch (Exception e)
+            {
+                try{
+                    outputStream.write("Failed to determine if environment is compiled. Defaulting to non-compiled environment.".getBytes());
+                }catch (Exception ignored){}
+                return false;
+            }
+        }
+
+        /**
+         * Sets the output stream to the default system output stream.
+         * @return The builder for chaining.
+         */
+        public Builder setDefaultOutputStream()
+        {
+            return this.setOutputStream(System.out);
+        }
+        public Builder setOutputStream(OutputStream outputStream)
+        {
+            this.outputStream = outputStream;
+            return this;
+        }
+        public Builder setResourcePath(Path resourcePath)
+        {
+            this.resourcePath = resourcePath;
+            return this;
+        }
+        public Builder useDefaultResourcePath()
+        {
+            if (isCompiledEnviroment())
+                this.resourcePath = Path.of("resources");
+            else
+                this.resourcePath = Path.of("src/main/resources");
+            return this;
+        }
+        public Builder useXMLGenerator(XMLCompiler... compilers)
+        {
+            this.compilers = compilers;
+            return this;
+        }
+        public Builder disableDefaultCompilers()
+        {
+            this.useDefaultCompilers = false;
+            return this;
+        }
+        public ResourceXML build()
+        {
+            if (this.compilers != null)
+            {
+                List<XMLCompiler> compilerList = Arrays.asList(this.compilers);
+                List<XMLCompiler> assembledCompiles = new ArrayList<>(compilerList);
+                if (this.useDefaultCompilers)
+                {
+                    assembledCompiles.add(new FieldClassCompiler());
+                }
+                this.compilers = assembledCompiles.toArray(XMLCompiler[]::new);
+            }
+            return new ResourceXML(this);
+        }
+    }
+
+    public <T> void generateXML(T obj, boolean useStaticFields) throws IllegalAccessException, ParserConfigurationException, TransformerConfigurationException {
+        if (obj == null) throw new IllegalArgumentException("Object to generate XML from cannot be null");
+        // If object is not of a type that can be constructed, it cannot be generated to XML
+        try {
+            Constructor<?> ignored = obj.getClass().getDeclaredConstructor();
+        } catch (NoSuchMethodException e) {
+            throw new IllegalArgumentException("Object of type " + obj.getClass().getName() + " cannot be generated to XML because it does not have a default constructor");
+        }
+        if (generator == null) throw new IllegalAccessException("Generator not loaded. Add 'useXMLGenerator' in the builder to use this module");
+        generator.generateXML(obj, useStaticFields);
+    }
+}

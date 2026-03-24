@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<root>
+    <owner value="Player1"/>
+    <capacity value="3"/>
+    <items>
+        <element>
+            <id value="1"/>
+            <name value="Iron Sword"/>
+            <description value="A basic sword forged from iron."/>
+            <weight value="3.5"/>
+            <value value="120"/>
+            <isEquippable value="true"/>
+        </element>
+        <element>
+            <id value="1"/>
+            <name value="Iron Sword"/>
+            <description value="A basic sword forged from iron."/>
+            <weight value="3.5"/>
+            <value value="120"/>
+            <isEquippable value="true"/>
+        </element>
+        <element>
+            <id value="1"/>
+            <name value="Iron Sword"/>
+            <description value="A basic sword forged from iron."/>
+            <weight value="3.5"/>
+            <value value="120"/>
+            <isEquippable value="true"/>
+        </element>
+    </items>
+</root>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<root>
+    <worldName value="Eldenmoor"/>
+    <width value="2048"/>
+    <height value="2048"/>
+    <gravity value="9.8"/>
+    <spawnPoint>
+        <element value="512.0"/>
+        <element value="128.0"/>
+    </spawnPoint>
+    <biomes>
+        <element value="Forest"/>
+        <element value="Desert"/>
+        <element value="Tundra"/>
+        <element value="Ocean"/>
+    </biomes>
+</root>
