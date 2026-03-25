@@ -118,6 +118,36 @@ public class ResourceXML
         }
     }
 
+    public <T> String getPathFor(T obj)
+    {
+        Path filePath = resourcePath;
+        if (obj.getClass().isAnnotationPresent(XmlDataPath.class)) {
+            filePath = filePath.resolve(obj.getClass().getAnnotation(XmlDataPath.class).value());
+        }
+
+        String fileName = obj.getClass().isAnnotationPresent(XmlFileName.class) ?
+                obj.getClass().getAnnotation(XmlFileName.class).value() :
+                obj.getClass().getSimpleName();
+
+        String absPath = filePath.resolve(fileName + ".xml").toAbsolutePath().toString();
+        int indexOf = absPath.indexOf(resourcePath.toString());
+        return absPath.substring(indexOf);
+    }
+    public String getPathFor(Class<?> clazz)
+    {
+        Path filePath = resourcePath;
+        if (clazz.isAnnotationPresent(XmlDataPath.class)) {
+            filePath = filePath.resolve(clazz.getAnnotation(XmlDataPath.class).value());
+        }
+
+        String fileName = clazz.isAnnotationPresent(XmlFileName.class) ?
+                clazz.getAnnotation(XmlFileName.class).value() :
+                clazz.getSimpleName();
+
+        String absPath = filePath.resolve(fileName + ".xml").toAbsolutePath().toString();
+        int indexOf = absPath.indexOf(resourcePath.toString());
+        return absPath.substring(indexOf);
+    }
     public <T> void generateXML(T obj) throws IllegalAccessException, ParserConfigurationException, TransformerException, IOException {
         if (obj == null) throw new IllegalArgumentException("Object to generate XML from cannot be null");
 
