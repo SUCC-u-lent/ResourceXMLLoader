@@ -53,8 +53,8 @@ public class XMLGenerator
 
         Element classElement = document.createElement("classSource");
         classElement.setAttribute("value", object.getClass().getName());
-        document.appendChild(classElement);
         document.appendChild(rootElement);
+        rootElement.appendChild(classElement);
 
         for (Field field : fields) {
             field.setAccessible(true);
