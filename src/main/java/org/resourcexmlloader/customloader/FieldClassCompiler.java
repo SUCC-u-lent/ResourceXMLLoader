@@ -13,8 +13,12 @@ import org.w3c.dom.NodeList;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 
 public class FieldClassCompiler implements XMLCompiler {
+    private final ThreadLocal<Set<Object>> visitedObjects = ThreadLocal.withInitial(() -> Collections.newSetFromMap(new IdentityHashMap<>()));
     @Override
     public double getPriority() {
         return -1; // Lowest priority, we want this to be selected last as it compiles anything with a no-arg constructor and is not an interface, so we want to give other compilers the chance to compile first.
@@ -31,37 +35,49 @@ public class FieldClassCompiler implements XMLCompiler {
     }
 
     @Override
-    public void compile(XMLGenerator generator,Document ownerDocument, Element rootElement, Element fieldElement, Class<?> clazz, Class<?> valueClazz, Object fieldValue)
-    {
-        Class<?> clazz2 = fieldValue == null ? clazz : fieldValue.getClass();
+    public void compile(XMLGenerator generator, Document ownerDocument, Element rootElement,
+                        Element fieldElement, Class<?> clazz, Class<?> valueClazz, Object fieldValue) {
 
-        // If null, instantiate defaults using the no-arg constructor (doesCompile already guarantees it exists)
-        if (fieldValue == null)
-        {
-            try { fieldValue = clazz2.getDeclaredConstructor().newInstance(); }
-            catch (Exception ignored) {}
+        // local visited map for this call stack
+        Set<Object> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+
+        compileInternal(generator, ownerDocument, rootElement, fieldElement, valueClazz, fieldValue, visited);
+    }
+    private void compileInternal(XMLGenerator generator, Document ownerDocument, Element rootElement,
+                                  Element fieldElement, Class<?> valueClazz, Object fieldValue,
+                                  Set<Object> visited) {
+
+        if (fieldValue == null) {
+            try {
+                fieldValue = valueClazz.getDeclaredConstructor().newInstance();
+            } catch (Exception ignored) {}
+            if (fieldValue == null) return;
         }
 
-        final Object resolvedValue = fieldValue;
-        Field[] fields = Arrays.stream(XmlLoaderExtensions.getAllFields(clazz2))
+        if (visited.contains(fieldValue)) {
+            fieldElement.setAttribute("cycle", "true");
+            return;
+        }
+        visited.add(fieldValue);
+
+        Field[] fields = Arrays.stream(XmlLoaderExtensions.getAllFields(valueClazz))
                 .filter(f -> !f.isAnnotationPresent(ExcludeField.class))
                 .toArray(Field[]::new);
-        for (Field field : fields)
-        {
-            field.setAccessible(true); // Always make accessible.
-            try
-            {
-                Object fieldValue2 = field.get(resolvedValue);
-                String fieldName = field.getName();
-                Class<?> fieldType = field.getType();
-                Element fieldElement2 = ownerDocument.createElement(fieldName);
 
-                // Now when generating we do something unique, if its a primative or a known type then we compile using that
-                // Compiling is done using attributes not text content as it looks neater.
-                generator.compileXMLClass(rootElement, fieldElement2, fieldType, fieldValue2,rootElement.hasAttribute("isTemplate"));
+        for (Field field : fields) {
+            field.setAccessible(true);
+            try {
+                Object fieldValue2 = field.get(fieldValue);
+                Element fieldElement2 = ownerDocument.createElement(field.getName());
+
+                // recursive call with visited map
+                compileInternal(generator, ownerDocument, rootElement, fieldElement2, field.getType(), fieldValue2, visited);
+
                 fieldElement.appendChild(fieldElement2);
-            }catch(Exception ignored){}
+            } catch (Exception ignored) {}
         }
+
+        visited.remove(fieldValue);
     }
 
     @Override
