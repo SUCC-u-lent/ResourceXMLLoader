@@ -58,7 +58,7 @@ public class FieldClassCompiler implements XMLCompiler {
 
                 // Now when generating we do something unique, if its a primative or a known type then we compile using that
                 // Compiling is done using attributes not text content as it looks neater.
-                generator.compileXMLClass(rootElement, fieldElement2, fieldType, fieldValue2);
+                generator.compileXMLClass(rootElement, fieldElement2, fieldType, fieldValue2,rootElement.hasAttribute("isTemplate"));
                 fieldElement.appendChild(fieldElement2);
             }catch(Exception ignored){}
         }
@@ -88,6 +88,14 @@ public class FieldClassCompiler implements XMLCompiler {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to decompile class " + clazz.getName(), e);
         }
+    }
+
+    @Override
+    public Object getExampleValue(XMLGenerator xmlGenerator, Document doc, Element rootElement, Element fieldElement, Class<?> clazz, Class<?> valueClazz) {
+        try{
+            return valueClazz.getDeclaredConstructor().newInstance();
+        }catch (Exception ignored){}
+        return null;
     }
 
     private static Element getChildElementByTagName(Element element, String tagName) {

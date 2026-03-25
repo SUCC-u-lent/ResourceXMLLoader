@@ -38,4 +38,6 @@ public interface XMLCompiler
     void compile(XMLGenerator generator, Document ownerDocument, Element rootElement, Element fieldElement, Class<?> clazz, Class<?> valueClazz, Object fieldValue);
 
     Object decompile(XMLDecompiler decompiler, Document ownerDocument, Element rootElement, Element fieldElement, Class<?> clazz);
+
+    Object getExampleValue(XMLGenerator xmlGenerator, Document doc, Element rootElement, Element fieldElement, Class<?> clazz, Class<?> valueClazz);
 }

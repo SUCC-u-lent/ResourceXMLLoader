@@ -69,4 +69,30 @@ public class XmlLoaderExtensions {
         else
             throw new IllegalArgumentException("Class "+clazz.getSimpleName()+" is not a known data type and cannot be decompiled by this method.");
     }
+
+    public static String getDefaultValue(Class<?> clazz)
+    {
+        if (clazz == String.class)
+            return "ExampleString";
+        else if (clazz == Number.class || clazz == Double.class || clazz == double.class)
+            return "0.0";
+        else if (clazz == Boolean.class || clazz == boolean.class)
+            return "false";
+        else if (clazz == Character.class || clazz == char.class)
+            return "A";
+        else if (clazz == Byte.class || clazz == byte.class)
+            return "0";
+        else if (clazz == Short.class || clazz == short.class)
+            return "0";
+        else if (clazz == Integer.class || clazz == int.class)
+            return "0";
+        else if (clazz == Long.class || clazz == long.class)
+            return "0";
+        else if (clazz == Float.class || clazz == float.class)
+            return "0.0";
+        else if (clazz == Date.class)
+            return java.text.DateFormat.getInstance().format(new Date());
+        else
+            throw new IllegalArgumentException("Class "+clazz.getSimpleName()+" is not a known data type and cannot be decompiled by this method.");
+    }
 }

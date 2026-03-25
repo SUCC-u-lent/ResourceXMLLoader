@@ -160,7 +160,7 @@ public class ResourceXML
             stringBuilder.append(dataPath);
         }
         stringBuilder.append(stringBuilder.isEmpty() ? "" : "\\").append("template.xml");
-        generator.generateXML(stringBuilder.toString(),obj);
+        generator.generateXML(stringBuilder.toString(),obj,true);
     }
     public void generateTemplate(String path, String fileName, Class<?> clazz) throws IllegalAccessException, NoSuchMethodException, InvocationTargetException, InstantiationException, TransformerException, ParserConfigurationException, IOException {
         // If object is not of a type that can be constructed, it cannot be generated to XML
@@ -172,7 +172,7 @@ public class ResourceXML
         if (generator == null) throw new IllegalAccessException("Generator not loaded. Add 'useXMLGenerator' in the builder to use this module");
         String stringBuilder = path + "\\" +
                 fileName;
-        generator.generateXML(stringBuilder,clazz.getDeclaredConstructor().newInstance());
+        generator.generateXML(stringBuilder,clazz.getDeclaredConstructor().newInstance(),true);
     }
 
     public Object[] loadXMLByClass(Class<?> clazz) throws IllegalAccessException, InvocationTargetException, NoSuchMethodException, InstantiationException {

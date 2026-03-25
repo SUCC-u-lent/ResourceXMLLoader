@@ -37,6 +37,9 @@ public class XMLGenerator
         this.compilers = compilers;
     }
     public <T> void generateXML(String fileName, T object) throws ParserConfigurationException, IllegalAccessException, TransformerException, IOException {
+        generateXML(fileName, object, false);
+    }
+    public <T> void generateXML(String fileName, T object, boolean isTemplate) throws ParserConfigurationException, IllegalAccessException, TransformerException, IOException {
 
         if (object == null) throw new IllegalArgumentException("Object cannot be null");
 
@@ -50,6 +53,8 @@ public class XMLGenerator
         Document document = builder.newDocument();
 
         Element rootElement = document.createElement("root");
+        if (isTemplate)
+            rootElement.setAttribute("isTemplate","true");
 
         Element classElement = document.createElement("classSource");
         classElement.setAttribute("value", object.getClass().getName());
@@ -61,7 +66,7 @@ public class XMLGenerator
             Object fieldValue = field.get(object);
             Element fieldElement = document.createElement(field.getName());
 
-            compileXMLClass(rootElement, fieldElement, field.getType(), fieldValue);
+            compileXMLClass(rootElement, fieldElement, field.getType(), fieldValue,isTemplate);
             rootElement.appendChild(fieldElement);
         }
 
@@ -82,7 +87,40 @@ public class XMLGenerator
         System.out.println("XML generated successfully at: " + file.getAbsolutePath());
     }
 
-    public void compileXMLClass(Element rootElement, Element fieldElement, Class<?> clazz, Object fieldValue) {
+    public void compileXMLClass(Element rootElement, Element fieldElement, Class<?> clazz, Object fieldValue, boolean isTemplate)
+    {
+        if (isTemplate)
+        {
+
+            Document doc = fieldElement.getOwnerDocument();
+
+            if (clazz.isArray()) {
+                int length = Array.getLength(fieldValue);
+                for (int i = 0; i < length; i++) {
+                    Object elementValue = Array.get(fieldValue, i);
+                    Element element = doc.createElement("element");
+                    compileXMLClass(rootElement, element, clazz.getComponentType(), elementValue,isTemplate);
+                    fieldElement.appendChild(element);
+                }
+            } else if (XmlLoaderExtensions.isKnownDataType(clazz)) {
+                String defaultValue = XmlLoaderExtensions.getDefaultValue(clazz);
+                fieldElement.setAttribute("value", defaultValue);
+            } else {
+                Class<?> valueClazz = fieldValue.getClass();
+                Optional<XMLCompiler> compiler = Arrays.stream(this.compilers)
+                        .filter(c -> c.doesCompile(clazz) || c.doesCompile(valueClazz))
+                        .max(Comparator.comparingDouble(XMLCompiler::getPriority));
+
+                if (compiler.isPresent()) {
+                    Object exampleValue = compiler.get().getExampleValue(this, doc, rootElement, fieldElement, clazz, valueClazz);
+                    compiler.get().compile(this, doc, rootElement, fieldElement, clazz, valueClazz, exampleValue);
+                } else {
+                    // Fallback: just set to string
+                    fieldElement.setAttribute("value", fieldValue.toString());
+                }
+            }
+            return;
+        }
         if (fieldValue == null) {
             try {
                 fieldValue = clazz.getDeclaredConstructor().newInstance();
@@ -100,7 +138,7 @@ public class XMLGenerator
             for (int i = 0; i < length; i++) {
                 Object elementValue = Array.get(fieldValue, i);
                 Element element = doc.createElement("element");
-                compileXMLClass(rootElement, element, clazz.getComponentType(), elementValue);
+                compileXMLClass(rootElement, element, clazz.getComponentType(), elementValue,isTemplate);
                 fieldElement.appendChild(element);
             }
         } else if (XmlLoaderExtensions.isKnownDataType(clazz)) {
