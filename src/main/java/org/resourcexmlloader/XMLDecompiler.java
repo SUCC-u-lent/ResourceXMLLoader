@@ -2,25 +2,16 @@ package org.resourcexmlloader;
 
 import org.resourcexmlloader.annotations.ExcludeField;
 import org.resourcexmlloader.annotations.XmlDataPath;
-import org.resourcexmlloader.annotations.XmlFileName;
-import org.resourcexmlloader.interfaces.XMLCompiler;
+import org.resourcexmlloader.interfaces.XMLClassCompiler;
+import org.resourcexmlloader.interfaces.XMLFieldCompiler;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-import javax.print.Doc;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerConfigurationException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
@@ -33,12 +24,14 @@ public class XMLDecompiler
 {
     Path resourcePath;
     OutputStream outputStream;
-    XMLCompiler[] compilers;
-    XMLDecompiler(Path resourcePath, OutputStream outputStream, XMLCompiler[] compilers)
+    XMLFieldCompiler[] fieldCompilers;
+    XMLClassCompiler[] classCompilers;
+    XMLDecompiler(Path resourcePath, OutputStream outputStream, XMLFieldCompiler[] fieldCompilers, XMLClassCompiler[] classCompilers)
     {
         this.resourcePath = resourcePath;
         this.outputStream = outputStream;
-        this.compilers = compilers;
+        this.fieldCompilers = fieldCompilers;
+        this.classCompilers = classCompilers;
     }
 
 
@@ -79,17 +72,28 @@ public class XMLDecompiler
             Element doc = dom.getDocumentElement();
             Element rootElement = "root".equals(doc.getTagName()) ? doc : getElementByTagName(doc,"root");
             if (rootElement == null) throw new IllegalStateException("File "+file.getName()+" is not a valid XML file for decompilation. Root element is missing.");
-            for (Field field : fields) {
-                field.setAccessible(true);
-                String fieldName = field.getName();
-                Class<?> fieldType = field.getType();
-                Element fieldElement = getElementByTagName(rootElement,fieldName);
-                if (fieldElement == null) continue;
-                Object decompiledValue = decompileValue(rootElement,fieldElement,fieldType);
-                try{
-                    field.set(classInstance,decompiledValue);
-                }catch (Exception e){
-                    e.printStackTrace();
+
+            XMLClassCompiler classCompiler = Arrays.stream(this.classCompilers).filter(
+                    c -> c.accepts(clazz)
+            )
+                    .max(Comparator.comparingDouble(XMLClassCompiler::getPriority))
+                    .orElse(null);
+            if (classCompiler != null)
+            {
+                classCompiler.decompile(this,dom,rootElement,fields,clazz,classInstance);
+            } else {
+                for (Field field : fields) {
+                    field.setAccessible(true);
+                    String fieldName = field.getName();
+                    Class<?> fieldType = field.getType();
+                    Element fieldElement = getElementByTagName(rootElement,fieldName);
+                    if (fieldElement == null) continue;
+                    Object decompiledValue = decompileValue(rootElement,fieldElement,fieldType);
+                    try{
+                        field.set(classInstance,decompiledValue);
+                    }catch (Exception e){
+                        e.printStackTrace();
+                    }
                 }
             }
         }catch (Exception ignored){}
@@ -99,6 +103,12 @@ public class XMLDecompiler
     public Object decompileValue(Element rootElement, Element fieldElement, Class<?> clazz)
     {
         if (fieldElement == null) return null;
+        Document doc = fieldElement.getOwnerDocument();
+        Optional<XMLFieldCompiler> compiler = Arrays.stream(this.fieldCompilers).filter(
+                c -> c.doesCompile(clazz)
+        ).max(Comparator.comparingDouble(XMLFieldCompiler::getPriority));
+        if (compiler.isPresent() && compiler.get().alwaysCompileUsing(clazz))
+            return compiler.get().decompile(this, doc, rootElement, fieldElement, clazz);
 
         if (clazz.isArray())
         {
@@ -119,9 +129,6 @@ public class XMLDecompiler
         }
         else
         {
-            Optional<XMLCompiler> compiler = Arrays.stream(this.compilers).filter(
-                    c -> c.doesCompile(clazz)
-            ).max(Comparator.comparingDouble(XMLCompiler::getPriority));
             if (compiler.isEmpty()) throw new IllegalStateException("No compiler found for type " + clazz.getSimpleName());
             return compiler.get().decompile(this, fieldElement.getOwnerDocument(), rootElement, fieldElement, clazz);
         }

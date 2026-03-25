@@ -2,9 +2,9 @@ package org.resourcexmlloader;
 
 import org.jetbrains.annotations.NotNull;
 import org.resourcexmlloader.annotations.ExcludeField;
-import org.resourcexmlloader.annotations.XmlDataPath;
-import org.resourcexmlloader.annotations.XmlFileName;
-import org.resourcexmlloader.interfaces.XMLCompiler;
+import org.resourcexmlloader.annotations.XmlComment;
+import org.resourcexmlloader.interfaces.XMLClassCompiler;
+import org.resourcexmlloader.interfaces.XMLFieldCompiler;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
@@ -15,7 +15,6 @@ import javax.xml.transform.*;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Array;
@@ -30,12 +29,14 @@ public class XMLGenerator
 {
     Path resourcePath;
     OutputStream outputStream;
-    XMLCompiler[] compilers;
-    XMLGenerator(Path resourcePath, OutputStream outputStream, XMLCompiler[] compilers)
+    XMLFieldCompiler[] fieldCompilers;
+    XMLClassCompiler[] classCompilers;
+    XMLGenerator(Path resourcePath, OutputStream outputStream, XMLFieldCompiler[] fieldCompilers, XMLClassCompiler[] classCompilers)
     {
         this.resourcePath = resourcePath;
         this.outputStream = outputStream;
-        this.compilers = compilers;
+        this.fieldCompilers = fieldCompilers;
+        this.classCompilers = classCompilers;
     }
     public <T> void generateXML(String fileName, T object) throws ParserConfigurationException, IllegalAccessException, TransformerException, IOException {
         generateXML(fileName, object, false);
@@ -56,19 +57,39 @@ public class XMLGenerator
         Element rootElement = document.createElement("root");
         if (isTemplate)
             rootElement.setAttribute("isTemplate","true");
+        if (object.getClass().isAnnotationPresent(XmlComment.class))
+        {
+            XmlComment comment = object.getClass().getAnnotation(XmlComment.class);
+            rootElement.appendChild(document.createComment(comment.value()));
+        }
 
         Element classElement = document.createElement("classSource");
         classElement.setAttribute("value", object.getClass().getName());
         document.appendChild(rootElement);
         rootElement.appendChild(classElement);
 
-        for (Field field : fields) {
-            field.setAccessible(true);
-            Object fieldValue = field.get(object);
-            Element fieldElement = document.createElement(field.getName());
+        XMLClassCompiler classCompiler = Arrays.stream(this.classCompilers)
+                .filter(c -> c.accepts(object.getClass()))
+                .max(Comparator.comparingDouble(XMLClassCompiler::getPriority))
+                .orElse(null);
+        if (classCompiler != null)
+        {
+            classCompiler.compile(this,document,rootElement,fields,object.getClass(),object);
+        } else {
+            for (Field field : fields) {
+                field.setAccessible(true);
+                Object fieldValue = field.get(object);
+                Element fieldElement = document.createElement(field.getName());
 
-            compileXMLClass(rootElement, fieldElement, field.getType(), fieldValue,isTemplate);
-            rootElement.appendChild(fieldElement);
+                if (field.isAnnotationPresent(XmlComment.class))
+                {
+                    XmlComment comment = field.getAnnotation(XmlComment.class);
+                    fieldElement.appendChild(document.createComment(comment.value()));
+                }
+
+                compileXMLClass(rootElement, fieldElement, field.getType(), fieldValue,isTemplate);
+                rootElement.appendChild(fieldElement);
+            }
         }
 
         // Create file
@@ -90,18 +111,34 @@ public class XMLGenerator
 
     public void compileXMLClass(Element rootElement, Element fieldElement, @NotNull Class<?> clazz, Object fieldValue, boolean isTemplate)
     {
+        if (clazz.isArray() && clazz.getComponentType().isAnnotationPresent(XmlComment.class))
+        {
+            XmlComment comment = clazz.getComponentType().getAnnotation(XmlComment.class);
+            fieldElement.appendChild(rootElement.getOwnerDocument().createComment(comment.value()));
+        }
+        else if (!clazz.isArray() && clazz.isAnnotationPresent(XmlComment.class))
+        {
+            XmlComment comment = clazz.getAnnotation(XmlComment.class);
+            fieldElement.appendChild(rootElement.getOwnerDocument().createComment(comment.value()));
+        }
         if (isTemplate)
         {
             Class<?> valueClazz = fieldValue == null ? null : fieldValue.getClass();
-            Optional<XMLCompiler> compiler = Arrays.stream(this.compilers)
+            Optional<XMLFieldCompiler> compiler = Arrays.stream(this.fieldCompilers)
                     .filter(c -> c.doesCompile(clazz) || (valueClazz != null && c.doesCompile(valueClazz)))
-                    .max(Comparator.comparingDouble(XMLCompiler::getPriority));
+                    .max(Comparator.comparingDouble(XMLFieldCompiler::getPriority));
             if (XmlLoaderExtensions.isKnownDataType(clazz))
                 fieldValue = XmlLoaderExtensions.getDefaultValue(clazz);
             else if (compiler.isPresent())
                 fieldValue = compiler.get().getExampleValue(this, fieldElement.getOwnerDocument(), rootElement, fieldElement, clazz, valueClazz);
 
             Document doc = fieldElement.getOwnerDocument();
+
+            if (compiler.isPresent() && compiler.get().alwaysCompileUsing(clazz))
+            {
+                compiler.get().compile(this, doc, rootElement, fieldElement, clazz, valueClazz, fieldValue);
+                return;
+            }
 
             if (clazz.isArray()) {
                 int length = fieldValue == null ? 0 : Array.getLength(fieldValue);
@@ -151,9 +188,9 @@ public class XMLGenerator
             fieldElement.setAttribute("value", fieldValue.toString());
         } else {
             Class<?> valueClazz = fieldValue.getClass();
-            Optional<XMLCompiler> compiler = Arrays.stream(this.compilers)
+            Optional<XMLFieldCompiler> compiler = Arrays.stream(this.fieldCompilers)
                     .filter(c -> c.doesCompile(clazz) || c.doesCompile(valueClazz))
-                    .max(Comparator.comparingDouble(XMLCompiler::getPriority));
+                    .max(Comparator.comparingDouble(XMLFieldCompiler::getPriority));
 
             if (compiler.isPresent()) {
                 compiler.get().compile(this, doc, rootElement, fieldElement, clazz, valueClazz, fieldValue);

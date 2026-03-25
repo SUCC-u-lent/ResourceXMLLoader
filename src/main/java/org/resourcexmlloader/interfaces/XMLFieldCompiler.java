@@ -7,10 +7,10 @@ import org.w3c.dom.Element;
 
 /**
  * Instructs how to compile a field into and from XML.
- * Must be added to the {@link org.resourcexmlloader.ResourceXML.Builder} to be used.
- * Used in the {@link org.resourcexmlloader.ResourceXML.Builder#useXMLGenerator(XMLCompiler...)} method to add as a compiler.
+ * <br/><br/>Must be added to the {@link org.resourcexmlloader.ResourceXML.Builder} to be used.
+ * <br/><br/>Used in the {@link org.resourcexmlloader.ResourceXML.Builder#useFieldCompilers(XMLFieldCompiler...)} method to add as a compiler.
  */
-public interface XMLCompiler
+public interface XMLFieldCompiler
 {
     /**
      * Handles what compiler is accepted first. Highest is selected first.
@@ -24,6 +24,13 @@ public interface XMLCompiler
      * @return True if it should use this compiler.
      */
     boolean doesCompile(Class<?> clazz);
+
+    /**
+     * Overrides base compiling and decompile to always use this compiler, if you're getting an output that you dont want, just override this and set it to true
+     * @param clazz The class the field is declared as and/or the class the field value is.
+     * @return True if the base compiling should be ignored in favour of this compiler, false to use the base compiling and decompiling.
+     */
+    default boolean alwaysCompileUsing(Class<?> clazz) { return false; }
 
     /**
      * Handles compiling the field, usually only used for generating the template

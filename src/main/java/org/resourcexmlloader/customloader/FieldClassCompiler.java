@@ -4,7 +4,7 @@ import org.resourcexmlloader.XMLDecompiler;
 import org.resourcexmlloader.XMLGenerator;
 import org.resourcexmlloader.XmlLoaderExtensions;
 import org.resourcexmlloader.annotations.ExcludeField;
-import org.resourcexmlloader.interfaces.XMLCompiler;
+import org.resourcexmlloader.interfaces.XMLFieldCompiler;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -17,7 +17,7 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Set;
 
-public class FieldClassCompiler implements XMLCompiler {
+public class FieldClassCompiler implements XMLFieldCompiler {
     private final ThreadLocal<Set<Object>> visitedObjects = ThreadLocal.withInitial(() -> Collections.newSetFromMap(new IdentityHashMap<>()));
     @Override
     public double getPriority() {

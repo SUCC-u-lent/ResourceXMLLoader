@@ -3,10 +3,10 @@ package org.resourcexmlloader;
 import org.resourcexmlloader.annotations.XmlDataPath;
 import org.resourcexmlloader.annotations.XmlFileName;
 import org.resourcexmlloader.customloader.FieldClassCompiler;
-import org.resourcexmlloader.interfaces.XMLCompiler;
+import org.resourcexmlloader.interfaces.XMLClassCompiler;
+import org.resourcexmlloader.interfaces.XMLFieldCompiler;
 
 import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.TransformerException;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -27,10 +27,13 @@ public class ResourceXML
         this.resourcePath = builder.resourcePath;
         this.outputStream = builder.outputStream;
         this.generator = null;
-        if (builder.compilers != null)
+        XMLFieldCompiler[] fieldCompilers = builder.fieldCompilers == null ? new XMLFieldCompiler[0] : builder.fieldCompilers;
+        XMLClassCompiler[] classCompilers = builder.classCompilers == null ? new XMLClassCompiler[0] : builder.classCompilers;
+
+        if (fieldCompilers.length > 0 || classCompilers.length > 0)
         {
-            this.generator = new XMLGenerator(this.resourcePath,this.outputStream,builder.compilers);
-            this.decompiler = new XMLDecompiler(this.resourcePath,this.outputStream,builder.compilers);
+            this.generator = new XMLGenerator(this.resourcePath,this.outputStream,fieldCompilers,classCompilers);
+            this.decompiler = new XMLDecompiler(this.resourcePath,this.outputStream,fieldCompilers,classCompilers);
         }
     }
     OutputStream outputStream;
@@ -42,8 +45,11 @@ public class ResourceXML
     {
         OutputStream outputStream;
         Path resourcePath;
-        XMLCompiler[] compilers;
-        boolean useDefaultCompilers = true;
+
+        XMLFieldCompiler[] fieldCompilers;
+        boolean useDefaultFieldCompilers = true;
+
+        XMLClassCompiler[] classCompilers;
         public Builder(){}
         private boolean isCompiledEnviroment(Class<?> clazz)
         {
@@ -92,27 +98,35 @@ public class ResourceXML
                 this.resourcePath = Path.of("src/main/resources");
             return this;
         }
-        public Builder useXMLGenerator(XMLCompiler... compilers)
+
+        public Builder useFieldCompilers(XMLFieldCompiler... compilers)
         {
-            this.compilers = compilers;
+            this.fieldCompilers = compilers;
             return this;
         }
-        public Builder disableDefaultCompilers()
+        public Builder disableDefaultFieldCompilers()
         {
-            this.useDefaultCompilers = false;
+            this.useDefaultFieldCompilers = false;
             return this;
         }
+
+        public Builder useClassCompilers(XMLClassCompiler... compilers)
+        {
+            this.classCompilers = compilers;
+            return this;
+        }
+
         public ResourceXML build()
         {
-            if (this.compilers != null)
+            if (this.fieldCompilers != null)
             {
-                List<XMLCompiler> compilerList = Arrays.asList(this.compilers);
-                List<XMLCompiler> assembledCompiles = new ArrayList<>(compilerList);
-                if (this.useDefaultCompilers)
+                List<XMLFieldCompiler> compilerList = Arrays.asList(this.fieldCompilers);
+                List<XMLFieldCompiler> assembledCompiles = new ArrayList<>(compilerList);
+                if (this.useDefaultFieldCompilers)
                 {
                     assembledCompiles.add(new FieldClassCompiler());
                 }
-                this.compilers = assembledCompiles.toArray(XMLCompiler[]::new);
+                this.fieldCompilers = assembledCompiles.toArray(XMLFieldCompiler[]::new);
             }
             return new ResourceXML(this);
         }
