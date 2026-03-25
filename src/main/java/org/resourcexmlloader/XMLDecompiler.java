@@ -1,0 +1,166 @@
+package org.resourcexmlloader;
+
+import org.resourcexmlloader.annotations.ExcludeField;
+import org.resourcexmlloader.annotations.XmlDataPath;
+import org.resourcexmlloader.annotations.XmlFileName;
+import org.resourcexmlloader.interfaces.XMLCompiler;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+
+import javax.print.Doc;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.lang.reflect.Array;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Modifier;
+import java.nio.file.Path;
+import java.util.*;
+
+public class XMLDecompiler
+{
+    Path resourcePath;
+    OutputStream outputStream;
+    XMLCompiler[] compilers;
+    XMLDecompiler(Path resourcePath, OutputStream outputStream, XMLCompiler[] compilers)
+    {
+        this.resourcePath = resourcePath;
+        this.outputStream = outputStream;
+        this.compilers = compilers;
+    }
+
+
+    public Object[] loadXmlByClass(Class<?> clazz) throws IllegalAccessException, NoSuchMethodException, InvocationTargetException, InstantiationException {
+        try { var ignored = clazz.getDeclaredConstructor(); } catch (Exception e){ System.out.println("Failed to decompile class "+clazz.getSimpleName()+" no parameterless constructor could be located."); e.printStackTrace(); throw e;}
+        Path path = resourcePath;
+        if (clazz.isAnnotationPresent(XmlDataPath.class))
+        {
+            String annotationPath = clazz.getAnnotation(XmlDataPath.class).value();
+            path = resourcePath.resolve(annotationPath);
+        }
+        File file = path.toFile();
+        if (!file.isDirectory()) throw new IllegalAccessException("Path: "+path.toAbsolutePath()+" is not a directory and therefore cannot load files from");
+        List<File> files = gatherFiles(path)
+                .stream()
+                .filter(f->!f.getName().equalsIgnoreCase("template.xml"))
+                .toList();
+        List<Object> objects = new ArrayList<>();
+        for (File f : files)
+        {
+            Path absPath = f.toPath();
+            objects.add(decompileFile(f,absPath,clazz));
+        }
+        return objects.toArray(Object[]::new);
+    }
+    private Object decompileFile(File file, Path absPath, Class<?> clazz) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        Object classInstance = clazz.getDeclaredConstructor().newInstance();
+        Field[] fields = Arrays.stream(XmlLoaderExtensions.getAllFields(clazz))
+                .filter(f -> !f.isAnnotationPresent(ExcludeField.class))
+                .filter(f-> !Modifier.isStatic(f.getModifiers()) && !Modifier.isFinal(f.getModifiers()))
+                .toArray(Field[]::new);
+        Document dom;
+        // Make an  instance of the DocumentBuilderFactory
+        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        try {
+            DocumentBuilder db = dbf.newDocumentBuilder();
+            dom = db.parse(file);
+            Element doc = dom.getDocumentElement();
+            Element rootElement = "root".equals(doc.getTagName()) ? doc : getElementByTagName(doc,"root");
+            if (rootElement == null) throw new IllegalStateException("File "+file.getName()+" is not a valid XML file for decompilation. Root element is missing.");
+            for (Field field : fields) {
+                field.setAccessible(true);
+                String fieldName = field.getName();
+                Class<?> fieldType = field.getType();
+                Element fieldElement = getElementByTagName(rootElement,fieldName);
+                if (fieldElement == null) continue;
+                Object decompiledValue = decompileValue(rootElement,fieldElement,fieldType);
+                try{
+                    field.set(classInstance,decompiledValue);
+                }catch (Exception e){
+                    e.printStackTrace();
+                }
+            }
+        }catch (Exception ignored){}
+        return classInstance;
+    }
+
+    public Object decompileValue(Element rootElement, Element fieldElement, Class<?> clazz)
+    {
+        if (fieldElement == null) return null;
+
+        if (clazz.isArray())
+        {
+            Class<?> componentType = clazz.getComponentType();
+            Element[] elements = getChildElements(fieldElement);
+            int length = elements.length;
+            Object array = Array.newInstance(componentType, length);
+            for (int i = 0; i < length; i++) {
+                Element element = elements[i];
+                Object decompiledValue = decompileValue(rootElement,element,componentType);
+                Array.set(array,i,decompiledValue);
+            }
+            return array;
+        }
+        else if (XmlLoaderExtensions.isKnownDataType(clazz))
+        {
+            return XmlLoaderExtensions.decompileKnownTypes(clazz,fieldElement);
+        }
+        else
+        {
+            Optional<XMLCompiler> compiler = Arrays.stream(this.compilers).filter(
+                    c -> c.doesCompile(clazz)
+            ).max(Comparator.comparingDouble(XMLCompiler::getPriority));
+            if (compiler.isEmpty()) throw new IllegalStateException("No compiler found for type " + clazz.getSimpleName());
+            return compiler.get().decompile(this, fieldElement.getOwnerDocument(), rootElement, fieldElement, clazz);
+        }
+    }
+
+    private static Element getElementByTagName(Element element, String tagName){
+        for (Element child : getChildElements(element)) {
+            if (tagName.equals(child.getTagName())) return child;
+        }
+        return null;
+    }
+
+    private static Element[] getChildElements(Element element) {
+        NodeList childNodes = element.getChildNodes();
+        List<Element> elements = new ArrayList<>();
+        for (int i = 0; i < childNodes.getLength(); i++) {
+            Node node = childNodes.item(i);
+            if (node instanceof Element childElement) {
+                elements.add(childElement);
+            }
+        }
+        return elements.toArray(Element[]::new);
+    }
+
+    private List<File> gatherFiles(Path path)
+    {
+        File file = path.toFile();
+        if (!file.isDirectory()) return List.of(file);
+        List<File> files = new ArrayList<>();
+        try{
+            Arrays.stream(Objects.requireNonNull(file.listFiles()))
+                    .filter(e->!e.isDirectory())
+                    .forEach(files::add);
+        }catch (Exception ignored){}
+        try{
+            Arrays.stream(Objects.requireNonNull(file.listFiles()))
+                    .filter(File::isDirectory)
+                    .forEach(e->files.addAll(gatherFiles(e.toPath())));
+        }catch (Exception ignored){}
+        return files;
+    }
+}

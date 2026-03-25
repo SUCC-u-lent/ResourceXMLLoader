@@ -1,5 +1,7 @@
 package org.resourcexmlloader;
 
+import org.w3c.dom.Element;
+
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Date;
@@ -36,5 +38,34 @@ public class XmlLoaderExtensions {
                 ||  clazz == Float.class
                 ||  clazz == Double.class
                 ||  clazz == Date.class;
+    }
+
+    public static Object decompileKnownTypes(Class<?> clazz, Element fieldElement)
+    {
+        String value = fieldElement.getAttribute("value");
+        if (clazz == String.class)
+            return value;
+        else if (clazz == Number.class || clazz == Double.class || clazz == double.class)
+            return Double.parseDouble(value);
+        else if (clazz == Boolean.class || clazz == boolean.class)
+            return Boolean.parseBoolean(value);
+        else if (clazz == Character.class || clazz == char.class)
+            return value.isEmpty() ? '\0' : value.charAt(0);
+        else if (clazz == Byte.class || clazz == byte.class)
+            return Byte.parseByte(value);
+        else if (clazz == Short.class || clazz == short.class)
+            return Short.parseShort(value);
+        else if (clazz == Integer.class || clazz == int.class)
+            return Integer.parseInt(value);
+        else if (clazz == Long.class || clazz == long.class)
+            return Long.parseLong(value);
+        else if (clazz == Float.class || clazz == float.class)
+            return Float.parseFloat(value);
+        else if (clazz == Date.class)
+            try{
+                return java.text.DateFormat.getInstance().parse(value);
+            }catch (Exception e){e.printStackTrace(); throw new IllegalArgumentException("Failed to parse date with value "+value+" for field "+fieldElement.getTagName());}
+        else
+            throw new IllegalArgumentException("Class "+clazz.getSimpleName()+" is not a known data type and cannot be decompiled by this method.");
     }
 }

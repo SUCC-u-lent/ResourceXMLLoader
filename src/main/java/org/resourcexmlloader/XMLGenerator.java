@@ -18,8 +18,10 @@ import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Optional;
 
 public class XMLGenerator
@@ -34,34 +36,21 @@ public class XMLGenerator
         this.compilers = compilers;
     }
 
-    public <T> void generateXML(T object, boolean useStaticFields) throws ParserConfigurationException, IllegalAccessException, TransformerConfigurationException {
-        StringBuilder stringBuilder = new StringBuilder();
-        if (object.getClass().isAnnotationPresent(XmlDataPath.class))
-        {
-            String dataPath = object.getClass().getAnnotation(XmlDataPath.class).value();
-            stringBuilder.append(dataPath);
-        }
-        if (object.getClass().isAnnotationPresent(XmlFileName.class))
-        {
-            String fileName = object.getClass().getAnnotation(XmlFileName.class).value();
-            stringBuilder.append(stringBuilder.isEmpty() ? "" : "\\").append(fileName);
-        } else {
-            stringBuilder.append(stringBuilder.isEmpty() ? "" : "\\").append(object.getClass().getSimpleName());
-        }
-        stringBuilder.append(".xml");
-        String fileName = stringBuilder.toString();
+    public <T> void generateXML(String fileName,T object) throws ParserConfigurationException, IllegalAccessException, TransformerConfigurationException {
 
         Field[] fields = Arrays.stream(XmlLoaderExtensions.getAllFields(object.getClass()))
                 .filter(f -> !f.isAnnotationPresent(ExcludeField.class))
+                .filter(f-> !Modifier.isStatic(f.getModifiers()) && !Modifier.isFinal(f.getModifiers()))
                 .toArray(Field[]::new);
-        if (!useStaticFields)
-            fields = Arrays.stream(fields).filter(f -> !java.lang.reflect.Modifier.isStatic(f.getModifiers())).toArray(Field[]::new);
 
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         DocumentBuilder builder = factory.newDocumentBuilder();
         Document document = builder.newDocument();
 
+        Element classElement = document.createElement("classSource");
+        classElement.setAttribute("value",object.getClass().getName());
         Element rootElement = document.createElement("root");
+        rootElement.appendChild(classElement);
         document.appendChild(rootElement);
         for (Field field : fields)
         {
@@ -118,7 +107,7 @@ public class XMLGenerator
             Class<?> valueClazz = fieldValue == null ? null : fieldValue.getClass();
             Optional<XMLCompiler> compiler = Arrays.stream(this.compilers).filter(
                     c -> c.doesCompile(clazz) || c.doesCompile(valueClazz)
-            ).findFirst();
+            ).max(Comparator.comparingDouble(XMLCompiler::getPriority));
             if (compiler.isEmpty()) throw new IllegalStateException("No compiler found for type " + clazz.getSimpleName());
             compiler.get().compile(this, fieldElement.getOwnerDocument(), rootElement, fieldElement, clazz, valueClazz, fieldValue);
         }

@@ -1,16 +1,25 @@
 package org.resourcexmlloader.customloader;
 
+import org.resourcexmlloader.XMLDecompiler;
 import org.resourcexmlloader.XMLGenerator;
 import org.resourcexmlloader.XmlLoaderExtensions;
 import org.resourcexmlloader.annotations.ExcludeField;
 import org.resourcexmlloader.interfaces.XMLCompiler;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 
 public class FieldClassCompiler implements XMLCompiler {
+    @Override
+    public double getPriority() {
+        return -1; // Lowest priority, we want this to be selected last as it compiles anything with a no-arg constructor and is not an interface, so we want to give other compilers the chance to compile first.
+    }
+
     @Override
     public boolean doesCompile(Class<?> clazz) {
         boolean result = false;
@@ -53,5 +62,42 @@ public class FieldClassCompiler implements XMLCompiler {
                 fieldElement.appendChild(fieldElement2);
             }catch(Exception ignored){}
         }
+    }
+
+    @Override
+    public Object decompile(XMLDecompiler decompiler, Document ownerDocument, Element rootElement, Element fieldElement, Class<?> clazz) {
+        try {
+            Object classInstance = clazz.getDeclaredConstructor().newInstance();
+            Field[] fields = Arrays.stream(XmlLoaderExtensions.getAllFields(clazz))
+                    .filter(f -> !f.isAnnotationPresent(ExcludeField.class))
+                    .filter(f -> !Modifier.isStatic(f.getModifiers()) && !Modifier.isFinal(f.getModifiers()))
+                    .toArray(Field[]::new);
+
+            for (Field field : fields) {
+                field.setAccessible(true);
+                Element childElement = getChildElementByTagName(fieldElement, field.getName());
+                if (childElement == null) continue;
+
+                try {
+                    Object decompiledValue = decompiler.decompileValue(rootElement, childElement, field.getType());
+                    field.set(classInstance, decompiledValue);
+                } catch (Exception ignored) {}
+            }
+
+            return classInstance;
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to decompile class " + clazz.getName(), e);
+        }
+    }
+
+    private static Element getChildElementByTagName(Element element, String tagName) {
+        NodeList childNodes = element.getChildNodes();
+        for (int i = 0; i < childNodes.getLength(); i++) {
+            Node node = childNodes.item(i);
+            if (node instanceof Element childElement && tagName.equals(childElement.getTagName())) {
+                return childElement;
+            }
+        }
+        return null;
     }
 }
