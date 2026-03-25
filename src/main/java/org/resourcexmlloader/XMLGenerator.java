@@ -1,5 +1,6 @@
 package org.resourcexmlloader;
 
+import org.jetbrains.annotations.NotNull;
 import org.resourcexmlloader.annotations.ExcludeField;
 import org.resourcexmlloader.annotations.XmlDataPath;
 import org.resourcexmlloader.annotations.XmlFileName;
@@ -87,33 +88,36 @@ public class XMLGenerator
         System.out.println("XML generated successfully at: " + file.getAbsolutePath());
     }
 
-    public void compileXMLClass(Element rootElement, Element fieldElement, Class<?> clazz, Object fieldValue, boolean isTemplate)
+    public void compileXMLClass(Element rootElement, Element fieldElement, @NotNull Class<?> clazz, Object fieldValue, boolean isTemplate)
     {
         if (isTemplate)
         {
+            Class<?> valueClazz = fieldValue == null ? null : fieldValue.getClass();
+            Optional<XMLCompiler> compiler = Arrays.stream(this.compilers)
+                    .filter(c -> c.doesCompile(clazz) || (valueClazz != null && c.doesCompile(valueClazz)))
+                    .max(Comparator.comparingDouble(XMLCompiler::getPriority));
+            if (XmlLoaderExtensions.isKnownDataType(clazz))
+                fieldValue = XmlLoaderExtensions.getDefaultValue(clazz);
+            else if (compiler.isPresent())
+                fieldValue = compiler.get().getExampleValue(this, fieldElement.getOwnerDocument(), rootElement, fieldElement, clazz, valueClazz);
 
             Document doc = fieldElement.getOwnerDocument();
 
             if (clazz.isArray()) {
-                int length = Array.getLength(fieldValue);
-                for (int i = 0; i < length; i++) {
+                int length = fieldValue == null ? 0 : Array.getLength(fieldValue);
+                for (int i = 0; i < length; ++i) {
                     Object elementValue = Array.get(fieldValue, i);
                     Element element = doc.createElement("element");
-                    compileXMLClass(rootElement, element, clazz.getComponentType(), elementValue,isTemplate);
+                    this.compileXMLClass(rootElement, element, clazz.getComponentType(), elementValue, isTemplate);
                     fieldElement.appendChild(element);
                 }
             } else if (XmlLoaderExtensions.isKnownDataType(clazz)) {
                 String defaultValue = XmlLoaderExtensions.getDefaultValue(clazz);
                 fieldElement.setAttribute("value", defaultValue);
             } else {
-                Class<?> valueClazz = fieldValue == null ? null : fieldValue.getClass();
-                Optional<XMLCompiler> compiler = Arrays.stream(this.compilers)
-                        .filter(c -> c.doesCompile(clazz) || (valueClazz != null && c.doesCompile(valueClazz)))
-                        .max(Comparator.comparingDouble(XMLCompiler::getPriority));
 
                 if (compiler.isPresent()) {
-                    Object exampleValue = compiler.get().getExampleValue(this, doc, rootElement, fieldElement, clazz, valueClazz);
-                    compiler.get().compile(this, doc, rootElement, fieldElement, clazz, valueClazz, exampleValue);
+                    compiler.get().compile(this, doc, rootElement, fieldElement, clazz, valueClazz, fieldValue);
                 } else {
                     // Fallback: just set to string
                     if (fieldValue == null)
