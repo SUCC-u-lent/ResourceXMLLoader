@@ -12,6 +12,7 @@ public class XmlLoaderExtensions {
     {
         List<Field> fields = new ArrayList<>(List.of(clazz.getDeclaredFields()));
         Class<?> superclass = clazz.getSuperclass();
+        if (superclass == null) return fields.toArray(Field[]::new);
         Class<?>[] interfaces = superclass.getInterfaces();
         for (Class<?> i : interfaces)
             fields.addAll(List.of(i.getDeclaredFields()));
