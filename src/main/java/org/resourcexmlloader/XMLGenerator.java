@@ -106,9 +106,9 @@ public class XMLGenerator
                 String defaultValue = XmlLoaderExtensions.getDefaultValue(clazz);
                 fieldElement.setAttribute("value", defaultValue);
             } else {
-                Class<?> valueClazz = fieldValue.getClass();
+                Class<?> valueClazz = fieldValue == null ? null : fieldValue.getClass();
                 Optional<XMLCompiler> compiler = Arrays.stream(this.compilers)
-                        .filter(c -> c.doesCompile(clazz) || c.doesCompile(valueClazz))
+                        .filter(c -> c.doesCompile(clazz) || (valueClazz != null && c.doesCompile(valueClazz)))
                         .max(Comparator.comparingDouble(XMLCompiler::getPriority));
 
                 if (compiler.isPresent()) {
@@ -116,7 +116,9 @@ public class XMLGenerator
                     compiler.get().compile(this, doc, rootElement, fieldElement, clazz, valueClazz, exampleValue);
                 } else {
                     // Fallback: just set to string
-                    fieldElement.setAttribute("value", fieldValue.toString());
+                    if (fieldValue == null)
+                        fieldElement.setAttribute("value","null");
+                    else fieldElement.setAttribute("value", fieldValue.toString());
                 }
             }
             return;
