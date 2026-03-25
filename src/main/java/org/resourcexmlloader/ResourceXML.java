@@ -7,6 +7,8 @@ import org.resourcexmlloader.interfaces.XMLCompiler;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerException;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -116,32 +118,33 @@ public class ResourceXML
         }
     }
 
-    public <T> void generateXML(T obj) throws IllegalAccessException, ParserConfigurationException, TransformerConfigurationException {
+    public <T> void generateXML(T obj) throws IllegalAccessException, ParserConfigurationException, TransformerException, IOException {
         if (obj == null) throw new IllegalArgumentException("Object to generate XML from cannot be null");
-        // If object is not of a type that can be constructed, it cannot be generated to XML
+
         try {
-            Constructor<?> ignored = obj.getClass().getDeclaredConstructor();
+            obj.getClass().getDeclaredConstructor();
         } catch (NoSuchMethodException e) {
             throw new IllegalArgumentException("Object of type " + obj.getClass().getName() + " cannot be generated to XML because it does not have a default constructor");
         }
-        if (generator == null) throw new IllegalAccessException("Generator not loaded. Add 'useXMLGenerator' in the builder to use this module");
-        StringBuilder stringBuilder = new StringBuilder();
-        if (obj.getClass().isAnnotationPresent(XmlDataPath.class))
-        {
-            String dataPath = obj.getClass().getAnnotation(XmlDataPath.class).value();
-            stringBuilder.append(dataPath);
+
+        if (generator == null) throw new IllegalAccessException("Generator not loaded. Add 'useXMLGenerator' in the builder.");
+
+        if (resourcePath == null) throw new IllegalStateException("Resource path is not set.");
+
+        Path filePath = resourcePath;
+        if (obj.getClass().isAnnotationPresent(XmlDataPath.class)) {
+            filePath = filePath.resolve(obj.getClass().getAnnotation(XmlDataPath.class).value());
         }
-        if (obj.getClass().isAnnotationPresent(XmlFileName.class))
-        {
-            String fileName = obj.getClass().getAnnotation(XmlFileName.class).value();
-            stringBuilder.append(stringBuilder.isEmpty() ? "" : "\\").append(fileName);
-        } else {
-            stringBuilder.append(stringBuilder.isEmpty() ? "" : "\\").append(obj.getClass().getSimpleName());
-        }
-        stringBuilder.append(".xml");
-        generator.generateXML(stringBuilder.toString(),obj);
+
+        String fileName = obj.getClass().isAnnotationPresent(XmlFileName.class) ?
+                obj.getClass().getAnnotation(XmlFileName.class).value() :
+                obj.getClass().getSimpleName();
+
+        filePath = filePath.resolve(fileName + ".xml");
+
+        generator.generateXML(filePath.toString(), obj);
     }
-    public <T> void generateTemplate(T obj) throws IllegalAccessException, ParserConfigurationException, TransformerConfigurationException {
+    public <T> void generateTemplate(T obj) throws IllegalAccessException, ParserConfigurationException, TransformerException, IOException {
         if (obj == null) throw new IllegalArgumentException("Object to generate XML from cannot be null");
         // If object is not of a type that can be constructed, it cannot be generated to XML
         try {
@@ -159,7 +162,7 @@ public class ResourceXML
         stringBuilder.append(stringBuilder.isEmpty() ? "" : "\\").append("template.xml");
         generator.generateXML(stringBuilder.toString(),obj);
     }
-    public void generateTemplate(String path, String fileName, Class<?> clazz) throws IllegalAccessException, NoSuchMethodException, InvocationTargetException, InstantiationException, TransformerConfigurationException, ParserConfigurationException {
+    public void generateTemplate(String path, String fileName, Class<?> clazz) throws IllegalAccessException, NoSuchMethodException, InvocationTargetException, InstantiationException, TransformerException, ParserConfigurationException, IOException {
         // If object is not of a type that can be constructed, it cannot be generated to XML
         try {
             Constructor<?> ignored = clazz.getDeclaredConstructor();
