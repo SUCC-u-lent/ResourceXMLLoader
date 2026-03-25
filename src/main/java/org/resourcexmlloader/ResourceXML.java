@@ -45,11 +45,11 @@ public class ResourceXML
         XMLCompiler[] compilers;
         boolean useDefaultCompilers = true;
         public Builder(){}
-        private boolean isCompiledEnviroment()
+        private boolean isCompiledEnviroment(Class<?> clazz)
         {
             try
             {
-                String location = Builder.class
+                String location = clazz
                         .getProtectionDomain()
                         .getCodeSource()
                         .getLocation()
@@ -84,9 +84,9 @@ public class ResourceXML
             this.resourcePath = resourcePath;
             return this;
         }
-        public Builder useDefaultResourcePath()
+        public Builder useDefaultResourcePath(Class<?> clazz)
         {
-            if (isCompiledEnviroment())
+            if (isCompiledEnviroment(clazz))
                 this.resourcePath = Path.of("resources");
             else
                 this.resourcePath = Path.of("src/main/resources");
