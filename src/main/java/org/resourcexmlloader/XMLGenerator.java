@@ -85,6 +85,9 @@ public class XMLGenerator
 
     public void compileXMLClass(Element rootElement, Element fieldElement, Class<?> clazz, Object fieldValue)
     {
+        if (fieldValue == null)
+            try{fieldValue = clazz.getDeclaredConstructor().newInstance();}catch (Exception ignored){}
+        if (fieldValue == null) return;
         if (clazz.isArray())
         {
             Class<?> componentType = clazz.getComponentType();
@@ -104,7 +107,7 @@ public class XMLGenerator
         }
         else
         {
-            Class<?> valueClazz = fieldValue == null ? null : fieldValue.getClass();
+            Class<?> valueClazz = fieldValue.getClass();
             Optional<XMLCompiler> compiler = Arrays.stream(this.compilers).filter(
                     c -> c.doesCompile(clazz) || c.doesCompile(valueClazz)
             ).max(Comparator.comparingDouble(XMLCompiler::getPriority));
