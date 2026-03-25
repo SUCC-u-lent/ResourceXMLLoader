@@ -159,6 +159,18 @@ public class ResourceXML
         stringBuilder.append(stringBuilder.isEmpty() ? "" : "\\").append("template.xml");
         generator.generateXML(stringBuilder.toString(),obj);
     }
+    public void generateTemplate(String path, String fileName, Class<?> clazz) throws IllegalAccessException, NoSuchMethodException, InvocationTargetException, InstantiationException, TransformerConfigurationException, ParserConfigurationException {
+        // If object is not of a type that can be constructed, it cannot be generated to XML
+        try {
+            Constructor<?> ignored = clazz.getDeclaredConstructor();
+        } catch (NoSuchMethodException e) {
+            throw new IllegalArgumentException("Object of type " + clazz.getName() + " cannot be generated to XML because it does not have a default constructor");
+        }
+        if (generator == null) throw new IllegalAccessException("Generator not loaded. Add 'useXMLGenerator' in the builder to use this module");
+        String stringBuilder = path + "\\" +
+                fileName;
+        generator.generateXML(stringBuilder,clazz.getDeclaredConstructor().newInstance());
+    }
 
     public Object[] loadXMLByClass(Class<?> clazz) throws IllegalAccessException, InvocationTargetException, NoSuchMethodException, InstantiationException {
         if (clazz == null) throw new IllegalArgumentException("Object to generate XML from cannot be null");
@@ -170,5 +182,16 @@ public class ResourceXML
         }
         if (decompiler == null) throw new IllegalAccessException("Generator not loaded. Add 'useXMLGenerator' in the builder to use this module");
         return decompiler.loadXmlByClass(clazz);
+    }
+    public Object loadXmlByName(Class<?> clazz, String name) throws IllegalAccessException, InvocationTargetException, NoSuchMethodException, InstantiationException {
+        if (clazz == null) throw new IllegalArgumentException("Object to generate XML from cannot be null");
+        // If object is not of a type that can be constructed, it cannot be generated to XML
+        try {
+            Constructor<?> ignored = clazz.getDeclaredConstructor();
+        } catch (NoSuchMethodException e) {
+            throw new IllegalArgumentException("Object of type " + clazz.getName() + " cannot be generated to XML because it does not have a default constructor");
+        }
+        if (decompiler == null) throw new IllegalAccessException("Generator not loaded. Add 'useXMLGenerator' in the builder to use this module");
+        return decompiler.loadXmlByName(clazz,name);
     }
 }

@@ -163,4 +163,28 @@ public class XMLDecompiler
         }catch (Exception ignored){}
         return files;
     }
+
+    public Object loadXmlByName(Class<?> clazz, String fileName) throws IllegalAccessException, InvocationTargetException, NoSuchMethodException, InstantiationException {
+        try { var ignored = clazz.getDeclaredConstructor(); } catch (Exception e){ System.out.println("Failed to decompile class "+clazz.getSimpleName()+" no parameterless constructor could be located."); e.printStackTrace(); throw e;}
+        Path path = resourcePath;
+        if (clazz.isAnnotationPresent(XmlDataPath.class))
+        {
+            String annotationPath = clazz.getAnnotation(XmlDataPath.class).value();
+            path = resourcePath.resolve(annotationPath);
+        }
+        File file = path.toFile();
+        if (!file.isDirectory()) throw new IllegalAccessException("Path: "+path.toAbsolutePath()+" is not a directory and therefore cannot load files from");
+        List<File> files = gatherFiles(path)
+                .stream()
+                .filter(f->!f.getName().equalsIgnoreCase("template.xml"))
+                .filter(f->f.getName().equalsIgnoreCase(fileName) || f.getAbsolutePath().endsWith(fileName))
+                .toList();
+        List<Object> objects = new ArrayList<>();
+        for (File f : files)
+        {
+            Path absPath = f.toPath();
+            objects.add(decompileFile(f,absPath,clazz));
+        }
+        return objects.toArray(Object[]::new);
+    }
 }
