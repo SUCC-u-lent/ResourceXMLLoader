@@ -10,113 +10,53 @@ import java.util.Date;
 import java.util.List;
 
 public class XmlLoaderExtensions {
+    public static Field getIdentifierField(Class<?> clazz) {
+        Field[] fields = getAllFields(clazz);
+        for (Field field : fields)
+            if (field.isAnnotationPresent(XmlIdentifier.class) || field.getType().isAnnotationPresent(XmlIdentifier.class))
+            {
+                field.setAccessible(true);
+                Field[] fieldTypeFields = field.getType().getDeclaredFields();
+                for (Field fieldTypeField : fieldTypeFields)
+                    if (fieldTypeField.isAnnotationPresent(XmlIdentifier.class) && isKnownDataType(fieldTypeField.getType()))
+                    {
+                        fieldTypeField.setAccessible(true);
+                        return fieldTypeField;
+                    }
+                return field;
+            }
+        return null;
+    }
     public static <T> @Nullable XmlIdentifier getIdentifier(T obj)
     {
         Class<?> clazz = obj.getClass();
-        Field[] fields = getAllFields(clazz);
-        for (Field field : fields)
-            if (field.isAnnotationPresent(XmlIdentifier.class))
-            {
-                field.setAccessible(true);
-                XmlIdentifier annotation = null;
-                Field[] fieldTypeFields = field.getType().getDeclaredFields();
-                for (Field fieldTypeField : fieldTypeFields)
-                    if (fieldTypeField.isAnnotationPresent(XmlIdentifier.class) && isKnownDataType(fieldTypeField.getType()))
-                    {
-                        fieldTypeField.setAccessible(true);
-                        annotation = fieldTypeField.getAnnotation(XmlIdentifier.class);
-                        break;
-                    }
-                if (annotation == null) annotation = field.getAnnotation(XmlIdentifier.class);
-                return annotation;
-            }
-        return null;
+        Field field = getIdentifierField(clazz);
+        if (field == null) return null;
+        return field.getAnnotation(XmlIdentifier.class);
     }
     public static <T> @Nullable String getIdentifierValue(T obj)
     {
-        XmlIdentifier targetAnnotation = getIdentifier(obj);
-        if (targetAnnotation == null) return null;
         Class<?> clazz = obj.getClass();
-        Field[] fields = getAllFields(clazz);
-        for (Field field : fields)
-            if (field.isAnnotationPresent(XmlIdentifier.class))
-            {
-                field.setAccessible(true);
-                XmlIdentifier annotation = null;
-                Field[] fieldTypeFields = field.getType().getDeclaredFields();
-                for (Field fieldTypeField : fieldTypeFields)
-                    if (fieldTypeField.isAnnotationPresent(XmlIdentifier.class) && isKnownDataType(fieldTypeField.getType()))
-                    {
-                        fieldTypeField.setAccessible(true);
-                        annotation = fieldTypeField.getAnnotation(XmlIdentifier.class);
-                        if (targetAnnotation.equals(annotation))
-                            try {
-                                return fieldTypeField.get(obj).toString();
-                            } catch (IllegalAccessException ignored) { }
-                        break;
-                    }
-                if (annotation == null) annotation = field.getAnnotation(XmlIdentifier.class);
-                if (targetAnnotation.equals(annotation))
-                    try {
-                        return field.get(obj).toString();
-                    } catch (IllegalAccessException ignored) { }
-            }
-        return null;
+        Field field = getIdentifierField(clazz);
+        if (field == null) return null;
+        try {
+            return field.get(obj).toString();
+        } catch (Exception ignored) { return null; }
     }
     public static @Nullable XmlIdentifier getIdentifier(Class<?> clazz)
     {
-        Field[] fields = getAllFields(clazz);
-        for (Field field : fields)
-            if (field.isAnnotationPresent(XmlIdentifier.class))
-            {
-                field.setAccessible(true);
-                XmlIdentifier annotation = null;
-                Field[] fieldTypeFields = field.getType().getDeclaredFields();
-                for (Field fieldTypeField : fieldTypeFields)
-                    if (fieldTypeField.isAnnotationPresent(XmlIdentifier.class) && isKnownDataType(fieldTypeField.getType()))
-                    {
-                        fieldTypeField.setAccessible(true);
-                        annotation = fieldTypeField.getAnnotation(XmlIdentifier.class);
-                        break;
-                    }
-                if (annotation == null) annotation = field.getAnnotation(XmlIdentifier.class);
-                return annotation;
-            }
-        return null;
+        Field field = getIdentifierField(clazz);
+        if (field == null) return null;
+        return field.getAnnotation(XmlIdentifier.class);
     }
     public static @Nullable String getIdentifierValue(Class<?> clazz)
     {
-        XmlIdentifier targetAnnotation = getIdentifier(clazz);
-        if (targetAnnotation == null) return null;
-        Object instance;
-        try{
-            instance = clazz.getDeclaredConstructor().newInstance();
-        }catch (Exception ignored){ return null; }
-        Field[] fields = getAllFields(clazz);
-        for (Field field : fields)
-            if (field.isAnnotationPresent(XmlIdentifier.class))
-            {
-                field.setAccessible(true);
-                XmlIdentifier annotation = null;
-                Field[] fieldTypeFields = field.getType().getDeclaredFields();
-                for (Field fieldTypeField : fieldTypeFields)
-                    if (fieldTypeField.isAnnotationPresent(XmlIdentifier.class) && isKnownDataType(fieldTypeField.getType()))
-                    {
-                        fieldTypeField.setAccessible(true);
-                        annotation = fieldTypeField.getAnnotation(XmlIdentifier.class);
-                        if (targetAnnotation.equals(annotation))
-                            try {
-                                return fieldTypeField.get(instance).toString();
-                            } catch (IllegalAccessException ignored) { }
-                        break;
-                    }
-                if (annotation == null) annotation = field.getAnnotation(XmlIdentifier.class);
-                if (targetAnnotation.equals(annotation))
-                    try {
-                        return field.get(instance).toString();
-                    } catch (IllegalAccessException ignored) { }
-            }
-        return null;
+        Field field = getIdentifierField(clazz);
+        if (field == null) return null;
+        try {
+            Object instance = clazz.getDeclaredConstructor().newInstance();
+            return field.get(instance).toString();
+        } catch (Exception ignored) { return null; }
     }
     public static Field[] getAllFields(Class<?> clazz)
     {
