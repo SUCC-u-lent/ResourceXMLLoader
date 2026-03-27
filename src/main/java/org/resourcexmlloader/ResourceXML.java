@@ -139,9 +139,13 @@ public class ResourceXML
             filePath = filePath.resolve(obj.getClass().getAnnotation(XmlDataPath.class).value());
         }
 
-        String fileName = obj.getClass().isAnnotationPresent(XmlFileName.class) ?
-                obj.getClass().getAnnotation(XmlFileName.class).value() :
-                obj.getClass().getSimpleName();
+        // First check the entire data path for any object that decompiles into this class.
+
+        String fileName = XmlLoaderExtensions.getIdentifier(obj) != null
+                ? XmlLoaderExtensions.getIdentifierValue(obj)
+                : obj.getClass().isAnnotationPresent(XmlFileName.class)
+                ? obj.getClass().getAnnotation(XmlFileName.class).value()
+                : obj.getClass().getSimpleName();
 
         String absPath = filePath.resolve(fileName + ".xml").toAbsolutePath().toString();
         int indexOf = absPath.indexOf(resourcePath.toString());
@@ -154,9 +158,11 @@ public class ResourceXML
             filePath = filePath.resolve(clazz.getAnnotation(XmlDataPath.class).value());
         }
 
-        String fileName = clazz.isAnnotationPresent(XmlFileName.class) ?
-                clazz.getAnnotation(XmlFileName.class).value() :
-                clazz.getSimpleName();
+        String fileName = XmlLoaderExtensions.getIdentifier(clazz) != null
+                ? XmlLoaderExtensions.getIdentifierValue(clazz)
+                : clazz.isAnnotationPresent(XmlFileName.class)
+                ? clazz.getAnnotation(XmlFileName.class).value()
+                : clazz.getSimpleName();
 
         String absPath = filePath.resolve(fileName + ".xml").toAbsolutePath().toString();
         int indexOf = absPath.indexOf(resourcePath.toString());
