@@ -140,7 +140,10 @@ public class ResourceXML
     {
         if (cache.hasEntry(obj.getClass(), e->e.isValidValue(obj)))
             return cache.getEntry(obj.getClass(), e->e.isValidValue(obj)).relativePath();
-        throw new IllegalStateException("Object of type "+obj.getClass().getName()+" with value "+obj.toString()+" is not cached. Generate the object to XML first to cache it.");
+        try{ loadXMLByClass(obj.getClass()); }catch (Exception ignored){}
+        if (cache.hasEntry(obj.getClass(), e->e.isValidValue(obj)))
+            return cache.getEntry(obj.getClass(), e->e.isValidValue(obj)).relativePath();
+        throw new IllegalArgumentException("Object of type "+obj.getClass().getName()+" is not cached and cannot be found. Generate XML for this object first to get its path.");
     }
     public String getPathFor(Class<?> clazz)
     {
