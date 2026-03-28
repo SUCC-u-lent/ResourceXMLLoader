@@ -23,10 +23,10 @@ import java.nio.file.Path;
 import java.util.*;
 
 public class XMLTemplateGenerator {
-    private final Set<XMLFieldHandler> XML_FIELD_HANDLERS = new HashSet<>();
+    private final Set<XMLFieldHandler> xmlFieldHandlers = new HashSet<>();
     private XMLTemplateGenerator(Builder builder)
     {
-        XML_FIELD_HANDLERS.addAll(builder.fieldHandlers);
+        xmlFieldHandlers.addAll(builder.fieldHandlers);
     }
     public static class Builder
     {
