@@ -270,7 +270,11 @@ public class XMLLoader {
 
     private static File getFileForClass(Class<?> clazz, String filename) {
         File dir = getResourceDir(clazz);
-        File file = new File(dir, filename);
+        String resolvedFilename = filename;
+        if (resolvedFilename != null && !resolvedFilename.endsWith(".xml")) {
+            resolvedFilename = resolvedFilename + ".xml";
+        }
+        File file = new File(dir, resolvedFilename);
         if (!file.exists()) throw new IllegalArgumentException("File not found: " + file);
         return file;
     }
