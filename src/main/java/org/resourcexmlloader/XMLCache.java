@@ -16,6 +16,7 @@ class XMLCache {
         }
         public boolean isValidValue(Object value)
         {
+            if (cachedValue == null) return false;
             return cachedValue.equals(value);
         }
     }
