@@ -29,7 +29,7 @@ class XMLCache {
     {
         String fileNameWOExtension = file.getName().contains(".") ? file.getName().substring(0, file.getName().lastIndexOf('.')) : file.getName();
         String absolutePath = file.getAbsolutePath();
-        String relativePath = absolutePath.split(resourcePath.toAbsolutePath().toString())[1];
+        String relativePath = absolutePath.replace(resourcePath.toAbsolutePath().toString(), "");
         cacheEntries.add(new CacheEntry(clazz, fileNameWOExtension, file.getName(), absolutePath, relativePath, value));
     }
     public boolean hasEntry(Class<?> clazz, Predicate<CacheEntry> additionalPredicate) {
