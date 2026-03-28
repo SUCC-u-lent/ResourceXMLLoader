@@ -169,15 +169,18 @@ public class XMLLoader {
     public XMLMetadata getMetadata(Class<?> clazz, String filename) {
         Map<String, XMLMetadata> fileMap = classFileCache.computeIfAbsent(clazz, c -> new HashMap<>());
 
-        if (!filename.endsWith(".xml")) filename = filename + ".xml";
+        // Normalize cache key: always strip .xml suffix
+        String cacheKey = filename.endsWith(".xml") ? filename.substring(0, filename.length() - 4) : filename;
+        // Resolve the actual filename for file lookup
+        String resolvedFilename = filename.endsWith(".xml") ? filename : filename + ".xml";
 
-        if (fileMap.containsKey(filename)) {
-            return fileMap.get(filename);
+        if (fileMap.containsKey(cacheKey)) {
+            return fileMap.get(cacheKey);
         }
 
         // Not in cache → decompile and store
-        XMLMetadata metadata = decompileMetadata(clazz, filename);
-        fileMap.put(filename, metadata);
+        XMLMetadata metadata = decompileMetadata(clazz, resolvedFilename);
+        fileMap.put(cacheKey, metadata);
         return metadata;
     }
 
@@ -218,8 +221,8 @@ public class XMLLoader {
     private List<XMLMetadata> decompileAllMetadata(Class<?> clazz) {
         File dir = getResourceDir(clazz);
         File[] files = Arrays.stream(traverseFiles(dir))
-                .filter(f->f.getName().equalsIgnoreCase("template.xml"))
-                .filter(f->f.getName().endsWith(".xml"))
+                .filter(f -> f.getName().endsWith(".xml"))
+                .filter(f -> !f.getName().equalsIgnoreCase("template.xml"))
                 .toArray(File[]::new);
         if (files.length == 0) throw new IllegalArgumentException("No files found for class: " + clazz.getName());
 
