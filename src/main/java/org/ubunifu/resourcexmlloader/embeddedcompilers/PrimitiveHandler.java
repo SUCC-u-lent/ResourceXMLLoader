@@ -8,9 +8,7 @@ import org.w3c.dom.NodeList;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
-import java.util.HashSet;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 
 public class PrimitiveHandler implements XMLFieldHandler
 {
@@ -71,7 +69,7 @@ public class PrimitiveHandler implements XMLFieldHandler
     private Element[] getChildren(Element element)
     {
         NodeList children = element.getChildNodes();
-        Set<Element> childElements = new HashSet<>();
+        List<Element> childElements = new ArrayList<>();
         for (int i = 0; i < children.getLength(); i++) {
             Node node = children.item(i);
             if (node instanceof Element e) {
@@ -124,6 +122,9 @@ public class PrimitiveHandler implements XMLFieldHandler
         } else if (fieldClass.equals(Boolean.class) || fieldClass.equals(boolean.class)) {
             return Boolean.parseBoolean(value);
         } else if (fieldClass.equals(Character.class) || fieldClass.equals(char.class)) {
+            if (value.length() != 1) {
+                throw new IllegalArgumentException("Invalid character value: " + value);
+            }
             return value.charAt(0);
         }
         throw new IllegalArgumentException("Unsupported field type: " + fieldClass.getName());

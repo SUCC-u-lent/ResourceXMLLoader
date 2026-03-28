@@ -127,7 +127,7 @@ public class XMLTemplateGenerator {
                 .toArray(Field[]::new);
         for (Field field : fields) {
             field.setAccessible(true);
-            Optional<XMLFieldHandler> fieldHandler = XML_FIELD_HANDLERS.stream()
+            Optional<XMLFieldHandler> fieldHandler = xmlFieldHandlers.stream()
                     .filter(h->h.accepts(field.getType()))
                     .findFirst();
             if (fieldHandler.isEmpty())

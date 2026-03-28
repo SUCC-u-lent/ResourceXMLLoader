@@ -1,26 +1,22 @@
 package org.ubunifu.resourcexmlloader;
 
 import java.io.File;
-import java.lang.ref.WeakReference;
 import java.lang.reflect.*;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 import javax.xml.parsers.*;
 
-import org.ubunifu.resourcexmlloader.WeakIdentityHashMap;
-import org.ubunifu.resourcexmlloader.XMLMetadata;
 import org.ubunifu.resourcexmlloader.annotations.XMLDataPath;
 import org.ubunifu.resourcexmlloader.annotations.XMLExcludeField;
 import org.ubunifu.resourcexmlloader.embeddedcompilers.EnumHandler;
 import org.ubunifu.resourcexmlloader.embeddedcompilers.PrimitiveHandler;
 import org.ubunifu.resourcexmlloader.interfaces.XMLFieldHandler;
 import org.w3c.dom.*;
-import org.xml.sax.SAXException;
 
 public class XMLLoader {
 
-    private final Set<XMLFieldHandler> xmlFieldHandlers = new HashSet<>();
+    private final List<XMLFieldHandler> xmlFieldHandlers = new ArrayList<>();
 
     // Cache: class -> (filename -> metadata)
     private final Map<Class<?>, Map<String, XMLMetadata>> classFileCache = new HashMap<>();
@@ -129,7 +125,10 @@ public class XMLLoader {
      */
     public Object[] get(Class<?> clazz)
     {
-        return getMetadata(clazz).toArray(Object[]::new);
+        return getMetadata(clazz)
+                .stream()
+                .map(XMLMetadata::instance)
+                .toArray(Object[]::new);
     }
 
     /**
@@ -169,6 +168,8 @@ public class XMLLoader {
     /** Get metadata for a class + filename */
     public XMLMetadata getMetadata(Class<?> clazz, String filename) {
         Map<String, XMLMetadata> fileMap = classFileCache.computeIfAbsent(clazz, c -> new HashMap<>());
+
+        if (!filename.endsWith(".xml")) filename = filename + ".xml";
 
         if (fileMap.containsKey(filename)) {
             return fileMap.get(filename);
@@ -216,7 +217,10 @@ public class XMLLoader {
     /** Decompile all files in class resource directory */
     private List<XMLMetadata> decompileAllMetadata(Class<?> clazz) {
         File dir = getResourceDir(clazz);
-        File[] files = traverseFiles(dir);
+        File[] files = Arrays.stream(traverseFiles(dir))
+                .filter(f->f.getName().equalsIgnoreCase("template.xml"))
+                .filter(f->f.getName().endsWith(".xml"))
+                .toArray(File[]::new);
         if (files.length == 0) throw new IllegalArgumentException("No files found for class: " + clazz.getName());
 
         return Arrays.stream(files)
@@ -247,7 +251,7 @@ public class XMLLoader {
 
             for (Field field : fields) {
                 field.setAccessible(true);
-                Element fieldElement = document.getElementsByTagName(field.getName()).item(0) instanceof Element e ? e : null;
+                Element fieldElement = root.getElementsByTagName(field.getName()).item(0) instanceof Element e ? e : null;
                 if (fieldElement == null) continue;
 
                 Class<?> type = field.getType();
@@ -279,8 +283,30 @@ public class XMLLoader {
         return file;
     }
 
+    private static boolean isCompiled(Class<?> clazz)
+    {
+        try
+        {
+            String location = clazz
+                    .getProtectionDomain()
+                    .getCodeSource()
+                    .getLocation()
+                    .getPath();
+
+            return location.endsWith(".jar");
+        }
+        catch (Exception ignored) {}
+        return false;
+    }
+    private static Path getResourcePath(Class<?> clazz)
+    {
+        if (isCompiled(clazz))
+            return Path.of("resources");
+        else
+            return Path.of("src/main/resources");
+    }
     private static File getResourceDir(Class<?> clazz) {
-        Path base = Path.of("src/main/resources");
+        Path base = getResourcePath(clazz);
         if (clazz.isAnnotationPresent(XMLDataPath.class)) {
             base = base.resolve(clazz.getAnnotation(XMLDataPath.class).value());
         }
