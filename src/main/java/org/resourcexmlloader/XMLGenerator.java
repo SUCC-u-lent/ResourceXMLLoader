@@ -15,6 +15,7 @@ import javax.xml.transform.*;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Array;
@@ -31,12 +32,14 @@ public class XMLGenerator
     OutputStream outputStream;
     XMLFieldCompiler[] fieldCompilers;
     XMLClassCompiler[] classCompilers;
-    XMLGenerator(Path resourcePath, OutputStream outputStream, XMLFieldCompiler[] fieldCompilers, XMLClassCompiler[] classCompilers)
+    XMLCache xmlCache;
+    XMLGenerator(Path resourcePath, OutputStream outputStream, XMLFieldCompiler[] fieldCompilers, XMLClassCompiler[] classCompilers, XMLCache cache)
     {
         this.resourcePath = resourcePath;
         this.outputStream = outputStream;
         this.fieldCompilers = fieldCompilers;
         this.classCompilers = classCompilers;
+        this.xmlCache = cache;
     }
     public <T> void generateXML(String fileName, T object) throws ParserConfigurationException, IllegalAccessException, TransformerException, IOException {
         generateXML(fileName, object, false);

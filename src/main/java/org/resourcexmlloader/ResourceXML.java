@@ -8,11 +8,13 @@ import org.resourcexmlloader.interfaces.XMLFieldCompiler;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -26,20 +28,22 @@ public class ResourceXML
     {
         this.resourcePath = builder.resourcePath;
         this.outputStream = builder.outputStream;
+        this.cache = new XMLCache(this.resourcePath);
         this.generator = null;
         XMLFieldCompiler[] fieldCompilers = builder.fieldCompilers == null ? new XMLFieldCompiler[0] : builder.fieldCompilers;
         XMLClassCompiler[] classCompilers = builder.classCompilers == null ? new XMLClassCompiler[0] : builder.classCompilers;
 
         if (fieldCompilers.length > 0 || classCompilers.length > 0)
         {
-            this.generator = new XMLGenerator(this.resourcePath,this.outputStream,fieldCompilers,classCompilers);
-            this.decompiler = new XMLDecompiler(this.resourcePath,this.outputStream,fieldCompilers,classCompilers);
+            this.generator = new XMLGenerator(this.resourcePath,this.outputStream,fieldCompilers,classCompilers,cache);
+            this.decompiler = new XMLDecompiler(this.resourcePath,this.outputStream,fieldCompilers,classCompilers,cache);
         }
     }
     OutputStream outputStream;
     Path resourcePath;
     XMLGenerator generator;
     XMLDecompiler decompiler;
+    XMLCache cache;
 
     public static class Builder
     {
@@ -134,22 +138,9 @@ public class ResourceXML
 
     public <T> String getPathFor(T obj)
     {
-        Path filePath = resourcePath;
-        if (obj.getClass().isAnnotationPresent(XmlDataPath.class)) {
-            filePath = filePath.resolve(obj.getClass().getAnnotation(XmlDataPath.class).value());
-        }
-
-        // First check the entire data path for any object that decompiles into this class.
-
-        String fileName = XmlLoaderExtensions.getIdentifier(obj) != null
-                ? XmlLoaderExtensions.getIdentifierValue(obj)
-                : obj.getClass().isAnnotationPresent(XmlFileName.class)
-                ? obj.getClass().getAnnotation(XmlFileName.class).value()
-                : obj.getClass().getSimpleName();
-
-        String absPath = filePath.resolve(fileName + ".xml").toAbsolutePath().toString();
-        int indexOf = absPath.indexOf(resourcePath.toString());
-        return absPath.substring(indexOf);
+        if (cache.hasEntry(obj.getClass(), e->e.isValidValue(obj)))
+            return cache.getEntry(obj.getClass(), e->e.isValidValue(obj)).relativePath();
+        throw new IllegalStateException("Object of type "+obj.getClass().getName()+" with value "+obj.toString()+" is not cached. Generate the object to XML first to cache it.");
     }
     public String getPathFor(Class<?> clazz)
     {
@@ -192,7 +183,10 @@ public class ResourceXML
 
         filePath = filePath.resolve(fileName + ".xml");
 
+        Path finalFilePath = filePath;
+        if (cache.hasEntry(obj.getClass(), e->e.isValidPath(finalFilePath.toString()))) return;
         generator.generateXML(filePath.toString(), obj);
+        cache.addEntry(obj.getClass(), filePath.toFile(), obj);
     }
     public <T> void generateTemplate(T obj) throws IllegalAccessException, ParserConfigurationException, TransformerException, IOException {
         if (obj == null) throw new IllegalArgumentException("Object to generate XML from cannot be null");
@@ -210,7 +204,9 @@ public class ResourceXML
             stringBuilder.append(dataPath);
         }
         stringBuilder.append(stringBuilder.isEmpty() ? "" : "\\").append("template.xml");
+        if (cache.hasEntry(obj.getClass(), e->e.isValidPath(stringBuilder.toString()))) return;
         generator.generateXML(stringBuilder.toString(),obj,true);
+        cache.addEntry(obj.getClass(), new File(stringBuilder.toString()), obj);
     }
     public void generateTemplate(String path, String fileName, Class<?> clazz) throws IllegalAccessException, NoSuchMethodException, InvocationTargetException, InstantiationException, TransformerException, ParserConfigurationException, IOException {
         // If object is not of a type that can be constructed, it cannot be generated to XML
@@ -222,7 +218,9 @@ public class ResourceXML
         if (generator == null) throw new IllegalAccessException("Generator not loaded. Add 'useXMLGenerator' in the builder to use this module");
         String stringBuilder = path + "\\" +
                 fileName;
+        if (cache.hasEntry(clazz, e->e.isValidPath(stringBuilder))) return;
         generator.generateXML(stringBuilder,clazz.getDeclaredConstructor().newInstance(),true);
+        cache.addEntry(clazz, new File(stringBuilder), null);
     }
 
     public Object[] loadXMLByClass(Class<?> clazz) throws IllegalAccessException, InvocationTargetException, NoSuchMethodException, InstantiationException {

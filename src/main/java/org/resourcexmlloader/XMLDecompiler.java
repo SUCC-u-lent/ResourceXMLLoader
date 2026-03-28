@@ -4,14 +4,24 @@ import org.resourcexmlloader.annotations.ExcludeField;
 import org.resourcexmlloader.annotations.XmlDataPath;
 import org.resourcexmlloader.interfaces.XMLClassCompiler;
 import org.resourcexmlloader.interfaces.XMLFieldCompiler;
+import org.resourcexmlloader.interfaces.XMLFieldCompiler;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
+import javax.print.Doc;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
@@ -26,12 +36,14 @@ public class XMLDecompiler
     OutputStream outputStream;
     XMLFieldCompiler[] fieldCompilers;
     XMLClassCompiler[] classCompilers;
-    XMLDecompiler(Path resourcePath, OutputStream outputStream, XMLFieldCompiler[] fieldCompilers, XMLClassCompiler[] classCompilers)
+    XMLCache xmlCache;
+    XMLDecompiler(Path resourcePath, OutputStream outputStream, XMLFieldCompiler[] fieldCompilers, XMLClassCompiler[] classCompilers, XMLCache xmlCache)
     {
         this.resourcePath = resourcePath;
         this.outputStream = outputStream;
         this.fieldCompilers = fieldCompilers;
         this.classCompilers = classCompilers;
+        this.xmlCache = xmlCache;
     }
 
 
@@ -53,11 +65,20 @@ public class XMLDecompiler
         for (File f : files)
         {
             Path absPath = f.toPath();
-            objects.add(decompileFile(f,absPath,clazz));
+            if (xmlCache.hasEntry(clazz,f))
+            {
+                objects.add(xmlCache.getEntry(clazz,f));
+                continue;
+            }
+            Object value = decompileFile(f,absPath,clazz);
+            objects.add(value);
+            xmlCache.addEntry(clazz,f,value);
         }
         return objects.toArray(Object[]::new);
     }
     private Object decompileFile(File file, Path absPath, Class<?> clazz) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        if (xmlCache.hasEntry(clazz,file))
+            return xmlCache.getEntry(clazz,file).cachedValue();
         Object classInstance = clazz.getDeclaredConstructor().newInstance();
         Field[] fields = Arrays.stream(XmlLoaderExtensions.getAllFields(clazz))
                 .filter(f -> !f.isAnnotationPresent(ExcludeField.class))
@@ -97,6 +118,7 @@ public class XMLDecompiler
                 }
             }
         }catch (Exception ignored){}
+        xmlCache.addEntry(clazz,file,classInstance);
         return classInstance;
     }
 
