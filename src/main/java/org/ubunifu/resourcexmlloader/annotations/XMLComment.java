@@ -1,0 +1,13 @@
+package org.ubunifu.resourcexmlloader.annotations;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.FIELD,ElementType.TYPE})
+public @interface XMLComment {
+    String value();
+    boolean placeBefore() default false;
+}

@@ -1,5 +1,6 @@
 package org.ubunifu.resourcexmlloader;
 
+import org.ubunifu.resourcexmlloader.annotations.XMLComment;
 import org.ubunifu.resourcexmlloader.annotations.XMLDataPath;
 import org.ubunifu.resourcexmlloader.annotations.XMLExcludeField;
 import org.ubunifu.resourcexmlloader.embeddedcompilers.EnumHandler;
@@ -106,6 +107,10 @@ public class XMLTemplateGenerator {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         DocumentBuilder builder = factory.newDocumentBuilder();
         Document document = builder.newDocument();
+
+        if (clazz.isAnnotationPresent(XMLComment.class))
+            document.appendChild(document.createComment(clazz.getAnnotation(XMLComment.class).value()));
+
         Element rootElement = document.createElement("root");
         document.appendChild(rootElement);
         writeTemplate(clazz, fullPath, document, rootElement);
@@ -127,6 +132,12 @@ public class XMLTemplateGenerator {
                 .toArray(Field[]::new);
         for (Field field : fields) {
             field.setAccessible(true);
+            XMLComment comment = null;
+            if (field.isAnnotationPresent(XMLComment.class)) { comment = field.getAnnotation(XMLComment.class); }
+            else if (field.getType().isAnnotationPresent(XMLComment.class)) { comment = field.getType().getAnnotation(XMLComment.class); }
+
+            if (comment != null && comment.placeBefore())
+                rootElement.appendChild(document.createComment(comment.value()));
             Optional<XMLFieldHandler> fieldHandler = xmlFieldHandlers.stream()
                     .filter(h->h.accepts(field.getType()))
                     .findFirst();
@@ -135,6 +146,8 @@ public class XMLTemplateGenerator {
             Element fieldElement = document.createElement(field.getName());
             fieldHandler.get().handleTemplateField(clazz, document, rootElement, fieldElement, field.getType(), field);
             rootElement.appendChild(fieldElement);
+            if (comment != null && !comment.placeBefore())
+                rootElement.appendChild(document.createComment(comment.value()));
         }
     }
     private static Field[] getFields(Class<?> clazz)
