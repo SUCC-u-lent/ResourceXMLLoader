@@ -18,8 +18,18 @@ public class XMLLoader {
 
     private final List<XMLFieldHandler> xmlFieldHandlers = new ArrayList<>();
 
-    // Cache: class -> (filename -> metadata)
-    private final Map<Class<?>, Map<String, XMLMetadata>> classFileCache = new HashMap<>();
+    // Single cache: class -> entries(metadata + identity weak object reference).
+    private final Map<Class<?>, List<CacheEntry>> classCache = new HashMap<>();
+
+    private static final class CacheEntry {
+        private final XMLMetadata metadata;
+        private WeakIdentityHashMap.IdentityWeakReference<Object> instanceRef;
+
+        private CacheEntry(XMLMetadata metadata, Object instance) {
+            this.metadata = metadata;
+            this.instanceRef = new WeakIdentityHashMap.IdentityWeakReference<>(instance);
+        }
+    }
 
     private XMLLoader(Builder builder) {
         xmlFieldHandlers.addAll(builder.fieldHandlers);
@@ -52,20 +62,11 @@ public class XMLLoader {
      */
     public void reload()
     {
-        Class<?>[] allClasses = this.classFileCache.keySet().toArray(Class[]::new);
-        this.classFileCache.clear();
+        Class<?>[] allClasses = this.classCache.keySet().toArray(Class[]::new);
+        this.classCache.clear();
         for (Class<?> clazz : allClasses) {
-            Map<String, XMLMetadata> fileMap = classFileCache.computeIfAbsent(clazz, _ -> new HashMap<>());
-            List<XMLMetadata> metadataList = decompileAllMetadata(clazz);
-            for (XMLMetadata meta : metadataList) {
-                fileMap.put(
-                        meta.path()
-                                .toFile()
-                                .getName()
-                                .replace(".xml",""),
-                        meta
-                );
-            }
+            List<CacheEntry> entries = decompileAllEntries(clazz);
+            classCache.put(clazz, entries);
         }
     }
 
@@ -77,16 +78,15 @@ public class XMLLoader {
      */
     public String getPath(Class<?> clazz, Object obj)
     {
-        return getMetadata(clazz)
+        CacheEntry entry = getAllEntries(clazz)
                 .stream()
-                .filter(m -> m.instance().equals(obj))
+                .filter(e -> {
+                    Object loaded = resolveInstance(clazz, e);
+                    return loaded == obj || Objects.equals(loaded, obj);
+                })
                 .findFirst()
-                .map(m -> m.path()
-                        .toAbsolutePath()
-                        .toString()
-                        .replace(getResourceDir(clazz).getAbsolutePath(),"")
-                )
                 .orElseThrow(() -> new IllegalArgumentException("Object not found in metadata for class: " + clazz.getName()));
+        return toRelativeResourcePath(clazz, entry.metadata.path());
     }
 
     /**
@@ -97,15 +97,7 @@ public class XMLLoader {
      */
     public <T> String getPath(T obj)
     {
-        return getMetadata(obj.getClass())
-                .stream()
-                .filter(m -> m.instance().equals(obj))
-                .findFirst()
-                .map(m -> m.path()
-                        .toAbsolutePath()
-                        .toString()
-                        .replace(getResourceDir(obj.getClass()).getAbsolutePath(),""))
-                .orElseThrow(() -> new IllegalArgumentException("Object not found in metadata for class: " + obj.getClass().getName()));
+        return getPath(obj.getClass(), obj);
     }
 
     /**
@@ -115,7 +107,7 @@ public class XMLLoader {
      * @return The object instance.
      */
     public Object get(Class<?> clazz, String fieldName) {
-        return getMetadata(clazz,fieldName).instance();
+        return resolveInstance(clazz, getOrLoadEntry(clazz, fieldName));
     }
 
     /**
@@ -125,9 +117,9 @@ public class XMLLoader {
      */
     public Object[] get(Class<?> clazz)
     {
-        return getMetadata(clazz)
+        return getAllEntries(clazz)
                 .stream()
-                .map(XMLMetadata::instance)
+                .map(e -> resolveInstance(clazz, e))
                 .toArray(Object[]::new);
     }
 
@@ -167,46 +159,32 @@ public class XMLLoader {
 
     /** Get metadata for a class + filename */
     public XMLMetadata getMetadata(Class<?> clazz, String filename) {
-        Map<String, XMLMetadata> fileMap = classFileCache.computeIfAbsent(clazz, c -> new HashMap<>());
-
-        // Normalize cache key: always strip .xml suffix
-        String cacheKey = filename.endsWith(".xml") ? filename.substring(0, filename.length() - 4) : filename;
-        // Resolve the actual filename for file lookup
-        String resolvedFilename = filename.endsWith(".xml") ? filename : filename + ".xml";
-
-        if (fileMap.containsKey(cacheKey)) {
-            return fileMap.get(cacheKey);
-        }
-
-        // Not in cache → decompile and store
-        XMLMetadata metadata = decompileMetadata(clazz, resolvedFilename);
-        fileMap.put(cacheKey, metadata);
-        return metadata;
+        return getOrLoadEntry(clazz, filename).metadata;
     }
 
     /** Get all metadata for a class (all files) */
     public List<XMLMetadata> getMetadata(Class<?> clazz) {
-        Map<String, XMLMetadata> fileMap = classFileCache.computeIfAbsent(clazz, c -> new HashMap<>());
-        if (!fileMap.isEmpty()) return new ArrayList<>(fileMap.values());
-
-        // Decompile all files in class resource directory
-        List<XMLMetadata> metadataList = decompileAllMetadata(clazz);
-        for (XMLMetadata meta : metadataList) {
-            fileMap.put(
-                    meta.path()
-                    .toFile()
-                    .getName()
-                    .replace(".xml",""),
-                    meta
-            );
-        }
-        return metadataList;
+        return getAllEntries(clazz)
+                .stream()
+                .map(e -> e.metadata)
+                .toList();
+    }
+    public XMLMetadata getMetadata(Class<?> clazz,Object instance) {
+        return getAllEntries(clazz)
+                .stream()
+                .filter(e -> {
+                    Object loaded = resolveInstance(clazz, e);
+                    return loaded == instance || Objects.equals(loaded, instance);
+                })
+                .map(e -> e.metadata)
+                .findFirst()
+                .orElse(null);
     }
 
     // -------------------- Decompilation --------------------
 
     /** Decompile a single file for a class */
-    private XMLMetadata decompileMetadata(Class<?> clazz, String filename) {
+    private CacheEntry decompileMetadata(Class<?> clazz, String filename) {
         File file = getFileForClass(clazz, filename);
         Object instance;
         try {
@@ -214,11 +192,12 @@ public class XMLLoader {
         } catch (Exception e) {
             throw new RuntimeException("Cannot instantiate class: " + clazz, e);
         }
-        return readXMLMetadata(clazz, file, instance);
+        XMLMetadata metadata = readXMLMetadata(clazz, file, instance);
+        return new CacheEntry(metadata, instance);
     }
 
     /** Decompile all files in class resource directory */
-    private List<XMLMetadata> decompileAllMetadata(Class<?> clazz) {
+    private List<CacheEntry> decompileAllEntries(Class<?> clazz) {
         File dir = getResourceDir(clazz);
         File[] files = Arrays.stream(traverseFiles(dir))
                 .filter(f -> f.getName().endsWith(".xml"))
@@ -230,7 +209,8 @@ public class XMLLoader {
                 .map(f -> {
                     try {
                         Object instance = clazz.getDeclaredConstructor().newInstance();
-                        return readXMLMetadata(clazz, f, instance);
+                        XMLMetadata metadata = readXMLMetadata(clazz, f, instance);
+                        return new CacheEntry(metadata, instance);
                     } catch (Exception e) {
                         throw new RuntimeException("Failed to decompile file: " + f, e);
                     }
@@ -267,7 +247,7 @@ public class XMLLoader {
                 field.set(instance, value);
             }
 
-            return new XMLMetadata(root, file.toPath(), instance);
+            return new XMLMetadata(root, file.toPath());
         } catch (Exception e) {
             throw new RuntimeException("Failed to read XML for file: " + file, e);
         }
@@ -336,4 +316,71 @@ public class XMLLoader {
         for (Class<?> iface : clazz.getInterfaces()) fields.addAll(List.of(getFields(iface)));
         return fields.toArray(Field[]::new);
     }
+
+    private static String toCacheKey(String filename) {
+        return filename.endsWith(".xml") ? filename.substring(0, filename.length() - 4) : filename;
+    }
+
+    private static String fromCacheKeyToFilename(String cacheKey) {
+        return cacheKey.endsWith(".xml") ? cacheKey : cacheKey + ".xml";
+    }
+
+    private static String toCacheKey(Path path) {
+        return path.getFileName().toString().replace(".xml", "");
+    }
+
+    private CacheEntry getOrLoadEntry(Class<?> clazz, String filename) {
+        List<CacheEntry> entries = getEntries(clazz);
+        String cacheKey = toCacheKey(filename);
+        for (CacheEntry entry : entries) {
+            if (toCacheKey(entry.metadata.path()).equals(cacheKey)) {
+                return entry;
+            }
+        }
+
+        CacheEntry loaded = decompileMetadata(clazz, fromCacheKeyToFilename(cacheKey));
+        entries.add(loaded);
+        return loaded;
+    }
+
+    private List<CacheEntry> getAllEntries(Class<?> clazz) {
+        List<CacheEntry> entries = getEntries(clazz);
+        if (!entries.isEmpty()) {
+            return new ArrayList<>(entries);
+        }
+
+        List<CacheEntry> loaded = decompileAllEntries(clazz);
+        entries.addAll(loaded);
+        return loaded;
+    }
+
+    private List<CacheEntry> getEntries(Class<?> clazz) {
+        return classCache.computeIfAbsent(clazz, _ -> new ArrayList<>());
+    }
+
+    private Object resolveInstance(Class<?> clazz, CacheEntry entry) {
+        Object instance = entry.instanceRef.get();
+        if (instance != null) {
+            return instance;
+        }
+
+        try {
+            Object recreated = clazz.getDeclaredConstructor().newInstance();
+            // Rehydrate fields from XML file without storing strong references in metadata.
+            readXMLMetadata(clazz, entry.metadata.path().toFile(), recreated);
+            entry.instanceRef = new WeakIdentityHashMap.IdentityWeakReference<>(recreated);
+            return recreated;
+        } catch (Exception e) {
+            throw new RuntimeException("Cannot rehydrate instance for metadata path: " + entry.metadata.path(), e);
+        }
+    }
+
+
+    private static String toRelativeResourcePath(Class<?> clazz, Path absolutePath) {
+        return absolutePath
+                .toAbsolutePath()
+                .toString()
+                .replace(getResourceDir(clazz).getAbsolutePath(), "");
+    }
 }
+
