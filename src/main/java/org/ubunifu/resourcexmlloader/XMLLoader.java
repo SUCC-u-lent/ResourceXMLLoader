@@ -19,9 +19,7 @@ public class XMLLoader {
     private final List<XMLFieldHandler> xmlFieldHandlers = new ArrayList<>();
 
     // Single cache: (class + file key) -> entry(metadata + identity weak object reference).
-    private final Map<CacheKey, CacheEntry> cache = new HashMap<>();
-
-    private record CacheKey(Class<?> clazz, String fileKey) {}
+    private final Map<String, CacheEntry> cache = new HashMap<>();
 
     private static final class CacheEntry {
         private final Class<?> clazz;
@@ -68,12 +66,18 @@ public class XMLLoader {
      */
     public void reload()
     {
-        Class<?>[] allClasses = this.cache.keySet().stream().map(CacheKey::clazz).distinct().toArray(Class[]::new);
+        Class<?>[] allClasses = this.cache.keySet()
+                .stream()
+                .distinct()
+                .map(f->{
+                    try{return Class.forName(f);}catch(Exception ignored){return null;}
+                })
+                .toArray(Class[]::new);
         this.cache.clear();
         for (Class<?> clazz : allClasses) {
             List<CacheEntry> entries = decompileAllEntries(clazz);
             for (CacheEntry entry : entries) {
-                cache.put(new CacheKey(entry.clazz, entry.fileKey), entry);
+                cache.put(entry.clazz.getName(), entry);
             }
         }
     }
@@ -345,14 +349,13 @@ public class XMLLoader {
 
     private CacheEntry getOrLoadEntry(Class<?> clazz, String filename) {
         String fileKey = toCacheKey(filename);
-        CacheKey key = new CacheKey(clazz, fileKey);
-        CacheEntry cached = cache.get(key);
+        CacheEntry cached = cache.get(clazz.getName());
         if (cached != null) {
             return cached;
         }
 
         CacheEntry loaded = decompileMetadata(clazz, fromCacheKeyToFilename(fileKey));
-        cache.put(key, loaded);
+        cache.put(clazz.getName(), loaded);
         return loaded;
     }
 
@@ -364,7 +367,7 @@ public class XMLLoader {
 
         List<CacheEntry> loaded = decompileAllEntries(clazz);
         for (CacheEntry entry : loaded) {
-            cache.put(new CacheKey(entry.clazz, entry.fileKey), entry);
+            cache.put(entry.clazz.getName(), entry);
         }
         return loaded;
     }
@@ -372,7 +375,7 @@ public class XMLLoader {
     private List<CacheEntry> getEntries(Class<?> clazz) {
         return cache.entrySet()
                 .stream()
-                .filter(e -> e.getKey().clazz() == clazz)
+                .filter(e -> e.getKey().equalsIgnoreCase(clazz.getName()))
                 .map(Map.Entry::getValue)
                 .collect(Collectors.toCollection(ArrayList::new));
     }
