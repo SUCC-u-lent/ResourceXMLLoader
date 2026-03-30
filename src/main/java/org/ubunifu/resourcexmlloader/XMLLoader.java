@@ -293,12 +293,10 @@ public class XMLLoader {
                         XMLMetadata metadata = readXMLMetadata(clazz, f, instance);
                         return new CacheEntry(clazz, toCacheKey(f.toPath()), metadata, instance);
                     } catch (IllegalStateException e) {
-                        // ✅ EXPECTED: wrong type → skip
                         this.logDebug("Skipping file={} (type mismatch for class={})", f.getName(), clazz.getName());
                         return null;
 
                     } catch (Exception e) {
-                        // ❗ REAL ERROR: still log it
                         this.logError("Failed to decompile file={} for class={} reason={}", f.getAbsolutePath(), clazz.getName(), e.getMessage());
                         return null;
                     }
