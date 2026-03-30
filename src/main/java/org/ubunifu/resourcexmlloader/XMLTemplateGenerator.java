@@ -145,6 +145,7 @@ public class XMLTemplateGenerator {
             document.appendChild(document.createComment(clazz.getAnnotation(XMLComment.class).value()));
 
         Element rootElement = document.createElement("root");
+        rootElement.setAttribute("type",clazz.getName());
         document.appendChild(rootElement);
         writeTemplate(clazz, fullPath, document, rootElement);
         Transformer transformer = TransformerFactory.newInstance().newTransformer();

@@ -308,6 +308,9 @@ public class XMLLoader {
             Document document = builder.parse(file);
 
             Element root = document.getElementsByTagName("root").item(0) instanceof Element e ? e : document.getDocumentElement();
+            String typeAttr = root.getAttribute("type");
+            if (typeAttr.isEmpty()) return null;
+            if (!clazz.getName().equals(typeAttr)) return null;
 
             Field[] fields = Arrays.stream(getFields(clazz))
                     .filter(f -> !Modifier.isStatic(f.getModifiers()) && !Modifier.isFinal(f.getModifiers()))
