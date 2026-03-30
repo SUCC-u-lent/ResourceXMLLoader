@@ -103,6 +103,13 @@ public class XMLLoader {
     // -------------------- Public API --------------------
 
     /**
+     * Flush the cache, it does not reload the cache requiring {@link XMLLoader#reload()} to be called before any entries can be accessed again, useful when the program is expected to undergo a long downtime and the system resources is better used somewhere else.
+     */
+    public void flush()
+    {
+        this.cache.clear();
+    }
+    /**
      * Reloads the loader cache, typically unneeded but can be useful in some niche cases.
      */
     public void reload()
