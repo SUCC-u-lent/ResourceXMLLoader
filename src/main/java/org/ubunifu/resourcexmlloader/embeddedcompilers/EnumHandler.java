@@ -1,6 +1,8 @@
 package org.ubunifu.resourcexmlloader.embeddedcompilers;
 
 import org.ubunifu.resourcexmlloader.interfaces.XMLFieldHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.w3c.dom.Comment;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -11,6 +13,20 @@ import java.util.Arrays;
 
 public class EnumHandler implements XMLFieldHandler
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(EnumHandler.class);
+    private boolean loggingEnabled;
+
+    @Override
+    public void setLoggingEnabled(boolean enabled) {
+        this.loggingEnabled = enabled;
+    }
+
+    private void logDebug(String message, Object... args) {
+        if (loggingEnabled) {
+            LOGGER.debug(message, args);
+        }
+    }
+
     @Override
     public boolean accepts(Class<?> clazz) {
         if (clazz.isArray())
@@ -22,6 +38,7 @@ public class EnumHandler implements XMLFieldHandler
     public void handleTemplateField(Class<?> clazz, Document document, Element rootElement, Element fieldElement, Class<?> fieldClass, Field field) {
         Class<?> enumType = fieldClass.isArray() ? fieldClass.getComponentType() : fieldClass;
         Enum<?>[] enums = (Enum<?>[]) enumType.getEnumConstants();
+        logDebug("EnumHandler template generation class={} field={} enumType={} enumCount={} isArray={}", clazz.getName(), field.getName(), enumType.getName(), enums == null ? 0 : enums.length, fieldClass.isArray());
         if (fieldClass.isArray())
         {
             for (Enum<?> anEnum : enums) {
@@ -39,11 +56,13 @@ public class EnumHandler implements XMLFieldHandler
 
     @Override
     public Object decompileField(Class<?> clazz, Document document, Element root, Element fieldElement, Class<?> fieldClass, Field field) {
+        logDebug("EnumHandler decompile class={} field={} type={} isArray={}", clazz.getName(), field.getName(), fieldClass.getName(), fieldClass.isArray());
         if (fieldClass.isArray())
         {
             NodeList enumElements = fieldElement.getElementsByTagName("enum");
             @SuppressWarnings("rawtypes") Class<? extends Enum> enumType = fieldClass.getComponentType().asSubclass(Enum.class);
             Enum<?>[] enums = (Enum<?>[]) java.lang.reflect.Array.newInstance(fieldClass.getComponentType(), enumElements.getLength());
+            logDebug("Decompiling enum array for field={} with {} item(s)", field.getName(), enumElements.getLength());
             for (int i = 0; i < enumElements.getLength(); i++) {
                 Element enumElement = (Element) enumElements.item(i);
                 String value = enumElement.getAttribute("value");
@@ -54,6 +73,7 @@ public class EnumHandler implements XMLFieldHandler
         } else
         {
             String value = fieldElement.getAttribute("value");
+            logDebug("Decompiling single enum for field={} rawValue={}", field.getName(), value);
             return Enum.valueOf(fieldClass.asSubclass(Enum.class), value);
         }
     }

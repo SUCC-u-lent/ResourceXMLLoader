@@ -7,6 +7,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 import javax.xml.parsers.*;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.ubunifu.resourcexmlloader.annotations.XMLDataPath;
 import org.ubunifu.resourcexmlloader.annotations.XMLExcludeField;
 import org.ubunifu.resourcexmlloader.embeddedcompilers.EnumHandler;
@@ -15,13 +17,15 @@ import org.ubunifu.resourcexmlloader.interfaces.XMLFieldHandler;
 import org.w3c.dom.*;
 
 public class XMLLoader {
-
+    private static final Logger LOGGER = LoggerFactory.getLogger(XMLLoader.class);
     private final List<XMLFieldHandler> xmlFieldHandlers = new ArrayList<>();
 
     // Single cache: (class + file key) -> entry(metadata + identity weak object reference).
     private final Map<String, CacheEntry> cache = new HashMap<>();
+    final boolean enabledLogging;
 
-    private static final class CacheEntry {
+    private static final class CacheEntry
+    {
         private final Class<?> clazz;
         private final String fileKey;
         private final XMLMetadata metadata;
@@ -37,20 +41,57 @@ public class XMLLoader {
 
     private XMLLoader(Builder builder) {
         xmlFieldHandlers.addAll(builder.fieldHandlers);
+        this.enabledLogging = builder.enabledLogging;
+        xmlFieldHandlers.forEach(h -> h.setLoggingEnabled(this.enabledLogging));
+        logInfo("XMLLoader initialized with {} handler(s). Logging enabled={}", xmlFieldHandlers.size(), enabledLogging);
+    }
+
+    private void logInfo(String message, Object... args) {
+        if (enabledLogging) {
+            LOGGER.info(message, args);
+        }
+    }
+
+    private void logDebug(String message, Object... args) {
+        if (enabledLogging) {
+            LOGGER.debug(message, args);
+        }
+    }
+
+    private void logWarn(String message, Object... args) {
+        if (enabledLogging) {
+            LOGGER.warn(message, args);
+        }
+    }
+    private void logError(String message, Object... args) {
+        if (enabledLogging) {
+            LOGGER.error(message, args);
+        }
     }
 
     public static class Builder {
         private final Set<XMLFieldHandler> fieldHandlers = new HashSet<>();
+        private boolean enabledLogging;
         public Builder()
+        {
+        }
+
+        public Builder includeEmbeddedHandlers()
         {
             this.fieldHandlers.addAll(List.of(
                     new PrimitiveHandler(),
                     new EnumHandler()
             ));
+            return this;
         }
-
+        
         public Builder addFieldHandlers(XMLFieldHandler... handlers) {
             fieldHandlers.addAll(Arrays.asList(handlers));
+            return this;
+        }
+        public Builder useLogging()
+        {
+            this.enabledLogging = true;
             return this;
         }
 
@@ -66,20 +107,24 @@ public class XMLLoader {
      */
     public void reload()
     {
+        logInfo("Reload requested. Current cache size={}", this.cache.size());
         Class<?>[] allClasses = this.cache.keySet()
                 .stream()
                 .distinct()
                 .map(f->{
-                    try{return Class.forName(f);}catch(Exception ignored){return null;}
+                    try{return Class.forName(f);}catch(Exception e){ logError("An error occured while reloading.",e); return null;}
                 })
+                .filter(Objects::nonNull)
                 .toArray(Class[]::new);
         this.cache.clear();
+        logDebug("Cache cleared. Recompiling {} class(es)", allClasses.length);
         for (Class<?> clazz : allClasses) {
             List<CacheEntry> entries = decompileAllEntries(clazz);
             for (CacheEntry entry : entries) {
                 cache.put(entry.clazz.getName(), entry);
             }
         }
+        logInfo("Reload completed. Cache size now={}", this.cache.size());
     }
 
     /**
@@ -90,6 +135,7 @@ public class XMLLoader {
      */
     public String getPath(Class<?> clazz, Object obj)
     {
+        logDebug("Resolving resource path for class={} instance={}", clazz.getName(), obj);
         if (!clazz.isInstance(obj)) {
             throw new IllegalArgumentException("Object is not an instance of class: " + clazz.getName());
         }
@@ -122,6 +168,7 @@ public class XMLLoader {
      * @return The object instance.
      */
     public Object get(Class<?> clazz, String fieldName) {
+        logDebug("Fetching entry for class={} file={}", clazz.getName(), fieldName);
         return resolveInstance(clazz, getOrLoadEntry(clazz, fieldName));
     }
 
@@ -132,6 +179,7 @@ public class XMLLoader {
      */
     public Object[] get(Class<?> clazz)
     {
+        logDebug("Fetching all entries for class={}", clazz.getName());
         return getAllEntries(clazz)
                 .stream()
                 .map(e -> resolveInstance(clazz, e))
@@ -165,7 +213,7 @@ public class XMLLoader {
                     try{
                         clazz.cast(o);
                         return true;
-                    }catch(Exception ignored){}
+                    }catch(Exception e){logError("An error occured while getting "+clazz.getSimpleName(),e);}
                     return false;
                 })
                 .map(clazz::cast)
@@ -204,19 +252,23 @@ public class XMLLoader {
     /** Decompile a single file for a class */
     private CacheEntry decompileMetadata(Class<?> clazz, String filename) {
         File file = getFileForClass(clazz, filename);
+        logDebug("Decompiling metadata for class={} file={}", clazz.getName(), file.getAbsolutePath());
         Object instance;
         try {
             instance = clazz.getDeclaredConstructor().newInstance();
         } catch (Exception e) {
+            logError("Failed to instantiate class={} for file={} reason={}", clazz.getName(), file.getAbsolutePath(), e.getMessage());
             throw new RuntimeException("Cannot instantiate class: " + clazz, e);
         }
         XMLMetadata metadata = readXMLMetadata(clazz, file, instance);
+        logDebug("Decompiled class={} file={} fileKey={}", clazz.getName(), file.getName(), toCacheKey(file.toPath()));
         return new CacheEntry(clazz, toCacheKey(file.toPath()), metadata, instance);
     }
 
     /** Decompile all files in class resource directory */
     private List<CacheEntry> decompileAllEntries(Class<?> clazz) {
         File dir = getResourceDir(clazz);
+        logDebug("Scanning class={} resource directory={}", clazz.getName(), dir.getAbsolutePath());
         File[] files = Arrays.stream(traverseFiles(dir))
                 .filter(f -> f.getName().endsWith(".xml"))
                 .filter(f -> !f.getName().equalsIgnoreCase("template.xml"))
@@ -226,10 +278,12 @@ public class XMLLoader {
         return Arrays.stream(files)
                 .map(f -> {
                     try {
+                        logDebug("Decompiling discovered file={} for class={}", f.getAbsolutePath(), clazz.getName());
                         Object instance = clazz.getDeclaredConstructor().newInstance();
                         XMLMetadata metadata = readXMLMetadata(clazz, f, instance);
                         return new CacheEntry(clazz, toCacheKey(f.toPath()), metadata, instance);
                     } catch (Exception e) {
+                        logError("Failed to decompile file={} for class={} reason={}", f.getAbsolutePath(), clazz.getName(), e.getMessage());
                         throw new RuntimeException("Failed to decompile file: " + f, e);
                     }
                 })
@@ -239,6 +293,7 @@ public class XMLLoader {
     /** Read XML into metadata */
     private XMLMetadata readXMLMetadata(Class<?> clazz, File file, Object instance) {
         try {
+            logDebug("Reading XML metadata class={} file={}", clazz.getName(), file.getAbsolutePath());
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             DocumentBuilder builder = factory.newDocumentBuilder();
             Document document = builder.parse(file);
@@ -253,7 +308,10 @@ public class XMLLoader {
             for (Field field : fields) {
                 field.setAccessible(true);
                 Element fieldElement = root.getElementsByTagName(field.getName()).item(0) instanceof Element e ? e : null;
-                if (fieldElement == null) continue;
+                if (fieldElement == null) {
+                    logDebug("Skipping field={} because XML element was not found", field.getName());
+                    continue;
+                }
 
                 Class<?> type = field.getType();
                 Optional<XMLFieldHandler> handler = xmlFieldHandlers.stream()
@@ -261,12 +319,15 @@ public class XMLLoader {
                         .findFirst();
                 if (handler.isEmpty())
                     throw new IllegalStateException(String.format("No XMLFieldHandler found for field %s of type %s", field.getName(), type));
+                logDebug("Using handler={} for field={} type={} class={}", handler.get().getClass().getSimpleName(), field.getName(), type.getName(), clazz.getName());
                 Object value = handler.get().decompileField(clazz, document, root, fieldElement, type, field);
                 field.set(instance, value);
+                logDebug("Hydrated field={} with valueType={}", field.getName(), value == null ? "null" : value.getClass().getName());
             }
 
             return new XMLMetadata(root, file.toPath());
         } catch (Exception e) {
+            logError("Failed to read XML metadata class={} file={} reason={}", clazz.getName(), file.getAbsolutePath(), e.getMessage());
             throw new RuntimeException("Failed to read XML for file: " + file, e);
         }
     }
@@ -351,8 +412,11 @@ public class XMLLoader {
         String fileKey = toCacheKey(filename);
         CacheEntry cached = cache.get(clazz.getName());
         if (cached != null) {
+            logDebug("Cache hit for class={} requestedFile={} storedFileKey={}", clazz.getName(), filename, cached.fileKey);
             return cached;
         }
+
+        logDebug("Cache miss for class={} file={}. Loading metadata.", clazz.getName(), filename);
 
         CacheEntry loaded = decompileMetadata(clazz, fromCacheKeyToFilename(fileKey));
         cache.put(clazz.getName(), loaded);
@@ -362,6 +426,7 @@ public class XMLLoader {
     private List<CacheEntry> getAllEntries(Class<?> clazz) {
         List<CacheEntry> entries = getEntries(clazz);
         if (!entries.isEmpty()) {
+            logDebug("Returning {} cached entries for class={}", entries.size(), clazz.getName());
             return entries;
         }
 
@@ -369,6 +434,7 @@ public class XMLLoader {
         for (CacheEntry entry : loaded) {
             cache.put(entry.clazz.getName(), entry);
         }
+        logDebug("Loaded {} entries from disk for class={}", loaded.size(), clazz.getName());
         return loaded;
     }
 
@@ -386,16 +452,19 @@ public class XMLLoader {
         }
         Object instance = entry.instanceRef.get();
         if (instance != null && entry.clazz.isInstance(instance)) {
+            logDebug("Resolved live weak-reference instance for class={} fileKey={}", clazz.getName(), entry.fileKey);
             return instance;
         }
 
         try {
+            logDebug("Weak reference collected, rehydrating class={} from {}", clazz.getName(), entry.metadata.path());
             Object recreated = entry.clazz.getDeclaredConstructor().newInstance();
             // Rehydrate fields from XML file without storing strong references in metadata.
             readXMLMetadata(entry.clazz, entry.metadata.path().toFile(), recreated);
             entry.instanceRef = new WeakIdentityHashMap.IdentityWeakReference<>(recreated);
             return recreated;
         } catch (Exception e) {
+            logError("Failed rehydration for class={} path={} reason={}", clazz.getName(), entry.metadata.path(), e.getMessage());
             throw new RuntimeException("Cannot rehydrate instance for metadata path: " + entry.metadata.path(), e);
         }
     }

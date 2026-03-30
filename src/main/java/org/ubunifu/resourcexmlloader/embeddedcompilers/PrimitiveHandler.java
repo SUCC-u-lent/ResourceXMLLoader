@@ -1,6 +1,8 @@
 package org.ubunifu.resourcexmlloader.embeddedcompilers;
 
 import org.ubunifu.resourcexmlloader.interfaces.XMLFieldHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -12,6 +14,26 @@ import java.util.*;
 
 public class PrimitiveHandler implements XMLFieldHandler
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(PrimitiveHandler.class);
+    private boolean loggingEnabled;
+
+    @Override
+    public void setLoggingEnabled(boolean enabled) {
+        this.loggingEnabled = enabled;
+    }
+
+    private void logDebug(String message, Object... args) {
+        if (loggingEnabled) {
+            LOGGER.debug(message, args);
+        }
+    }
+
+    private void logWarn(String message, Object... args) {
+        if (loggingEnabled) {
+            LOGGER.warn(message, args);
+        }
+    }
+
     @Override
     public boolean accepts(Class<?> clazz) {
         if (clazz.isArray())
@@ -39,23 +61,31 @@ public class PrimitiveHandler implements XMLFieldHandler
     @Override
     public void handleTemplateField(Class<?> clazz, Document document, Element rootElement, Element fieldElement, Class<?> fieldClass, Field field)
     {
+        logDebug("PrimitiveHandler template generation class={} field={} type={}", clazz.getName(), field.getName(), fieldClass.getName());
         if (fieldClass.isArray())
         {
             int randomLength = Math.max(new Random().nextInt(10),1);
+            logDebug("Generating array template with {} item(s) for field={}", randomLength, field.getName());
             for (int i = 0; i < randomLength; i++) {
                 Element itemElement = document.createElement("item");
                 handleTemplateField(clazz, document, rootElement, itemElement, fieldClass.getComponentType(), field);
                 fieldElement.appendChild(itemElement);
             }
         }
-        else fieldElement.setAttribute("value", getDefaultValue(fieldClass).toString());
+        else {
+            Object defaultValue = getDefaultValue(fieldClass);
+            fieldElement.setAttribute("value", defaultValue.toString());
+            logDebug("Assigned template default value for field={} value={}", field.getName(), defaultValue);
+        }
     }
 
     @Override
     public Object decompileField(Class<?> clazz, Document document, Element root, Element fieldElement, Class<?> fieldClass, Field field) {
+        logDebug("PrimitiveHandler decompile class={} field={} type={}", clazz.getName(), field.getName(), fieldClass.getName());
         if (fieldClass.isArray())
         {
             Element[] children = getChildren(fieldElement);
+            logDebug("Decompiling primitive array with {} element(s) for field={}", children.length, field.getName());
             Object array = Array.newInstance(fieldClass.getComponentType(), children.length);
             for (int i = 0; i < children.length; i++) {
                 Element child = children[i];
@@ -105,6 +135,7 @@ public class PrimitiveHandler implements XMLFieldHandler
     private Object decompField(Element fieldElement, Class<?> fieldClass)
     {
         String value = fieldElement.getAttribute("value");
+        logDebug("Decompiling primitive value type={} rawValue={}", fieldClass.getName(), value);
         if (fieldClass.equals(String.class)) {
             return value;
         } else if (fieldClass.equals(Integer.class) || fieldClass.equals(int.class)) {
@@ -123,6 +154,7 @@ public class PrimitiveHandler implements XMLFieldHandler
             return Boolean.parseBoolean(value);
         } else if (fieldClass.equals(Character.class) || fieldClass.equals(char.class)) {
             if (value.length() != 1) {
+                logWarn("Invalid character value encountered: {}", value);
                 throw new IllegalArgumentException("Invalid character value: " + value);
             }
             return value.charAt(0);

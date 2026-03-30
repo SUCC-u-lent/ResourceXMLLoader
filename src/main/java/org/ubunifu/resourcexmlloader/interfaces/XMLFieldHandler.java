@@ -9,6 +9,13 @@ public interface XMLFieldHandler
 {
     boolean accepts(Class<?> clazz);
 
+    /**
+     * Optional hook for loaders/generators to propagate runtime logging preferences.
+     */
+    default void setLoggingEnabled(boolean enabled) {
+        // No-op by default for backwards compatibility.
+    }
+
     void handleTemplateField(Class<?> clazz, Document document, Element rootElement, Element fieldElement, Class<?> fieldClass, Field field);
 
     Object decompileField(Class<?> clazz, Document document, Element root, Element fieldElement, Class<?> fieldClass, Field field);
