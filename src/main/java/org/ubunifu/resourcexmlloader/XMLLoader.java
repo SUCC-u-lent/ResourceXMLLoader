@@ -21,7 +21,7 @@ public class XMLLoader {
     private final List<XMLFieldHandler> xmlFieldHandlers = new ArrayList<>();
 
     // Single cache: (class + file key) -> entry(metadata + identity weak object reference).
-    private final Map<String, CacheEntry> cache = new HashMap<>();
+    private final Map<String, List<CacheEntry>> cache = new HashMap<>();
     final boolean enabledLogging;
 
     private static final class CacheEntry
@@ -121,7 +121,9 @@ public class XMLLoader {
         for (Class<?> clazz : allClasses) {
             List<CacheEntry> entries = decompileAllEntries(clazz);
             for (CacheEntry entry : entries) {
-                cache.put(entry.clazz.getName(), entry);
+                this.cache
+                    .computeIfAbsent(entry.clazz.getName(), k -> new ArrayList<>())
+                     .add(entry);
             }
         }
         logInfo("Reload completed. Cache size now={}", this.cache.size());
@@ -410,7 +412,11 @@ public class XMLLoader {
 
     private CacheEntry getOrLoadEntry(Class<?> clazz, String filename) {
         String fileKey = toCacheKey(filename);
-        CacheEntry cached = cache.get(clazz.getName());
+        CacheEntry cached = cache.get(clazz.getName())
+                .stream()
+                .filter(e -> e.fileKey.equalsIgnoreCase(fileKey))
+                .findFirst()
+                .orElse(null);
         if (cached != null) {
             logDebug("Cache hit for class={} requestedFile={} storedFileKey={}", clazz.getName(), filename, cached.fileKey);
             return cached;
@@ -419,7 +425,9 @@ public class XMLLoader {
         logDebug("Cache miss for class={} file={}. Loading metadata.", clazz.getName(), filename);
 
         CacheEntry loaded = decompileMetadata(clazz, fromCacheKeyToFilename(fileKey));
-        cache.put(clazz.getName(), loaded);
+        this.cache
+                .computeIfAbsent(clazz.getName(), k -> new ArrayList<>())
+                .add(loaded);
         return loaded;
     }
 
@@ -432,7 +440,9 @@ public class XMLLoader {
 
         List<CacheEntry> loaded = decompileAllEntries(clazz);
         for (CacheEntry entry : loaded) {
-            cache.put(entry.clazz.getName(), entry);
+            this.cache
+                    .computeIfAbsent(entry.clazz.getName(), k -> new ArrayList<>())
+                    .add(entry);
         }
         logDebug("Loaded {} entries from disk for class={}", loaded.size(), clazz.getName());
         return loaded;
@@ -443,7 +453,8 @@ public class XMLLoader {
                 .stream()
                 .filter(e -> e.getKey().equalsIgnoreCase(clazz.getName()))
                 .map(Map.Entry::getValue)
-                .collect(Collectors.toCollection(ArrayList::new));
+                .flatMap(List::stream)
+                .toList();
     }
 
     private Object resolveInstance(Class<?> clazz, CacheEntry entry) {
