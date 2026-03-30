@@ -252,6 +252,7 @@ public class XMLLoader {
                     return matchesInstance(loaded, instance);
                 })
                 .map(e -> e.metadata)
+                .filter(Objects::nonNull)
                 .findFirst()
                 .orElse(null);
     }
@@ -309,8 +310,8 @@ public class XMLLoader {
 
             Element root = document.getElementsByTagName("root").item(0) instanceof Element e ? e : document.getDocumentElement();
             String typeAttr = root.getAttribute("type");
-            if (typeAttr.isEmpty()) return null;
-            if (!clazz.getName().equals(typeAttr)) return null;
+            if (typeAttr.isEmpty()) throw new IllegalStateException("Root element must have a 'type' attribute specifying the class name. File: " + file);
+            if (!clazz.getName().equals(typeAttr)) throw new IllegalStateException(String.format("Root element 'type' attribute '%s' does not match expected class '%s'. File: %s", typeAttr, clazz.getName(), file));
 
             Field[] fields = Arrays.stream(getFields(clazz))
                     .filter(f -> !Modifier.isStatic(f.getModifiers()) && !Modifier.isFinal(f.getModifiers()))
