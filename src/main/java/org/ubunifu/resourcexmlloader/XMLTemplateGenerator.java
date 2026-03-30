@@ -29,10 +29,12 @@ public class XMLTemplateGenerator {
     private static final Logger LOGGER = LoggerFactory.getLogger(XMLTemplateGenerator.class);
     private final List<XMLFieldHandler> xmlFieldHandlers = new ArrayList<>();
     final boolean enabledLogging;
+    private final String rootName;
     private XMLTemplateGenerator(Builder builder)
     {
         xmlFieldHandlers.addAll(builder.fieldHandlers);
         this.enabledLogging = builder.enabledLogging;
+        this.rootName = builder.rootName == null ? "root" : builder.rootName;
         xmlFieldHandlers.forEach(h -> h.setLoggingEnabled(this.enabledLogging));
         logInfo("XMLTemplateGenerator initialized with {} handler(s). Logging enabled={}", xmlFieldHandlers.size(), enabledLogging);
     }
@@ -50,6 +52,7 @@ public class XMLTemplateGenerator {
     }
     public static class Builder
     {
+        private String rootName;
         private final Set<XMLFieldHandler> fieldHandlers = new HashSet<>();
         boolean enabledLogging = false;
         public Builder()
@@ -66,6 +69,11 @@ public class XMLTemplateGenerator {
         public Builder useLogging()
         {
             this.enabledLogging = true;
+            return this;
+        }
+        public Builder setRootName(String rootName)
+        {
+            this.rootName = rootName;
             return this;
         }
         public Builder addFieldHandlers(XMLFieldHandler... handlers)
@@ -144,7 +152,7 @@ public class XMLTemplateGenerator {
         if (clazz.isAnnotationPresent(XMLComment.class))
             document.appendChild(document.createComment(clazz.getAnnotation(XMLComment.class).value()));
 
-        Element rootElement = document.createElement("root");
+        Element rootElement = document.createElement(this.rootName);
         rootElement.setAttribute("type",clazz.getName());
         document.appendChild(rootElement);
         writeTemplate(clazz, fullPath, document, rootElement);

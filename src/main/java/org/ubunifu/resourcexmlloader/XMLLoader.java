@@ -22,6 +22,7 @@ public class XMLLoader {
 
     // Single cache: (class + file key) -> entry(metadata + identity weak object reference).
     private final Map<String, List<CacheEntry>> cache = new HashMap<>();
+    private final String rootName;
     final boolean enabledLogging;
 
     private static final class CacheEntry
@@ -42,6 +43,7 @@ public class XMLLoader {
     private XMLLoader(Builder builder) {
         xmlFieldHandlers.addAll(builder.fieldHandlers);
         this.enabledLogging = builder.enabledLogging;
+        this.rootName = builder.rootName == null ? "root" : builder.rootName;
         xmlFieldHandlers.forEach(h -> h.setLoggingEnabled(this.enabledLogging));
         logInfo("XMLLoader initialized with {} handler(s). Logging enabled={}", xmlFieldHandlers.size(), enabledLogging);
     }
@@ -72,8 +74,14 @@ public class XMLLoader {
     public static class Builder {
         private final Set<XMLFieldHandler> fieldHandlers = new HashSet<>();
         private boolean enabledLogging;
+        private String rootName;
         public Builder()
         {
+        }
+        public Builder setRootName(String rootName)
+        {
+            this.rootName = rootName;
+            return this;
         }
 
         public Builder includeEmbeddedHandlers()
@@ -313,7 +321,7 @@ public class XMLLoader {
             DocumentBuilder builder = factory.newDocumentBuilder();
             Document document = builder.parse(file);
 
-            Element root = document.getElementsByTagName("root").item(0) instanceof Element e ? e : document.getDocumentElement();
+            Element root = document.getElementsByTagName(this.rootName).item(0) instanceof Element e ? e : document.getDocumentElement();
             String typeAttr = root.getAttribute("type");
             if (typeAttr.isEmpty()) throw new IllegalStateException("Root element must have a 'type' attribute specifying the class name. File: " + file);
             if (!clazz.getName().equals(typeAttr)) throw new IllegalStateException(String.format("Root element 'type' attribute '%s' does not match expected class '%s'. File: %s", typeAttr, clazz.getName(), file));
