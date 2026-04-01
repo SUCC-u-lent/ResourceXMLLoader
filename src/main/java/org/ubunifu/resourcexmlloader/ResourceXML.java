@@ -191,7 +191,7 @@ public class ResourceXML
             throw new RuntimeException(e);
         }
     }
-    public <T> Collection<T> getAllAs(Class<?> clazz, String name)
+    public <T> Collection<T> getAs(Class<?> clazz)
     {
         return this.get(clazz)
                 .stream()
@@ -202,7 +202,7 @@ public class ResourceXML
                         return true;
                     }catch (Exception e)
                     {
-                        writeLog(Level.WARN,"Failed to cast data of file %s to the provided type, skipping.%n", name, e);
+                        writeLog(Level.WARN,"Failed to cast data to the provided type, skipping.%n", e);
                         return false;
                     }
                 })
@@ -212,7 +212,7 @@ public class ResourceXML
                         return (T)o;
                     }catch (Exception e)
                     {
-                        writeLog(Level.WARN,"Failed to cast data of file %s to the provided type, skipping.%n", name, e);
+                        writeLog(Level.WARN,"Failed to cast data to the provided type, skipping.%n", e);
                         return null;
                     }
                 })
