@@ -93,16 +93,26 @@ public class ResourceXML
     {
         if (this.isInitializing) return; // Prevent recursive reload during initialization
         this.isInitializing = true;
-        this.flush();
-        this.register();
-        this.isInitializing = false;
+        ResourceConstants.ON_CACHE_RELOAD_START.invokeEvent();
+        ResourceConstants.ON_CACHE_RELOAD.invokeEvent();
+        try {
+            this.flush();
+            this.register();
+        } finally {
+            this.isInitializing = false;
+            ResourceConstants.ON_CACHE_RELOAD_END.invokeEvent();
+        }
     }
 
     /**
      * Flushes the internal cache to free up resources.
      */
     public void flush()
-    { this.cache.clear(); this.hasLoaded = false; }
+    {
+        this.cache.clear();
+        this.hasLoaded = false;
+        ResourceConstants.ON_CACHE_FLUSH.invokeEvent();
+    }
 
     /**
      * Adds a new class to the loader, this will trigger a {@link ResourceXML#reload()}
@@ -114,6 +124,7 @@ public class ResourceXML
     {
         if (hasLoaded) return;
         hasLoaded = true;
+        ResourceConstants.ON_CACHE_REGISTER_START.invokeEvent();
         Class<?> searchClass = classes.stream().findFirst().orElseThrow();
         Path path = getResourcePath(searchClass);
         if (!path.toFile().exists()) {
@@ -126,6 +137,9 @@ public class ResourceXML
             try {
                 fileClazz = XMLReader.getClassOfFile(file);
             } catch (Exception e) {
+                ResourceConstants.ON_RESOURCE_REGISTER_FAILED.invokeEvent(
+                        new ResourceConstants.RegisterFailureEvent(null, file.getName(), e)
+                );
                 if (loaderSettings.level() != null)
                     writeLog(Level.ERROR,"Failed to read file %s, skipping. Error: %s%n", file.getName(), e.getMessage());
                 throw new RuntimeException(e);
@@ -137,6 +151,9 @@ public class ResourceXML
             try {
                 data = XMLReader.readXML(fileClazz, file, loaderSettings);
             } catch (Exception e) {
+                ResourceConstants.ON_RESOURCE_REGISTER_FAILED.invokeEvent(
+                        new ResourceConstants.RegisterFailureEvent(fileClazz, file.getName(), e)
+                );
                 writeLog(Level.ERROR,"Failed to read file %s, skipping. Error: %s%n", file.getName(), e.getMessage());
                 throw new RuntimeException(e);
             }
@@ -144,12 +161,19 @@ public class ResourceXML
             CacheEntry entry = new CacheEntry(metadata, new WeakReference<>(data),data.hashCode());
             Set<CacheEntry> existingEntries = this.cache.getOrDefault(fileClazz.getName(), new HashSet<>());
             existingEntries.add(entry);
+            ResourceConstants.ON_RESOURCE_LOADED.invokeEvent(entry);
+            ResourceConstants.ON_RESOURCE_REGISTERED.invokeEvent(
+                    new ResourceConstants.RegisterFileEvent(fileClazz, metadata, entry)
+            );
             this.cache.put(fileClazz.getName(), existingEntries);
         }
+        ResourceConstants.ON_CACHE_LOADED.invokeEvent(new HashMap<>(this.cache)); // Uses a copy to avoid modification.
+        ResourceConstants.ON_CACHE_REGISTER_END.invokeEvent();
     }
 
     public Object get(Class<?> clazz, String name)
     {
+        ResourceConstants.ON_RESOURCE_REQUESTED.invokeEvent(new ResourceConstants.ClassNameEvent(clazz, name));
         String fileName = name.endsWith(".xml") ? name : name+".xml";
         Predicate<CacheEntry> filter = e->
         {
@@ -157,7 +181,14 @@ public class ResourceXML
             if (!eFileName.endsWith(".xml")) eFileName=eFileName+".xml";
             return eFileName.equalsIgnoreCase(fileName);
         };
-        return getEntry(clazz, filter).weakData.get();
+        try {
+            CacheEntry entry = getEntry(clazz, filter);
+            ResourceConstants.ON_RESOURCE_FOUND.invokeEvent(new ResourceConstants.LookupEvent(clazz, fileName, entry));
+            return entry.weakData.get();
+        } catch (IllegalArgumentException e) {
+            ResourceConstants.ON_RESOURCE_NOT_FOUND.invokeEvent(new ResourceConstants.ClassNameEvent(clazz, fileName));
+            throw e;
+        }
     }
     public Collection<Object> get(Class<?> clazz)
     {
@@ -168,6 +199,7 @@ public class ResourceXML
     }
     public XMLMetadata getMetadata(Class<?> clazz, String name)
     {
+        ResourceConstants.ON_METADATA_REQUESTED.invokeEvent(new ResourceConstants.ClassNameEvent(clazz, name));
         String fileName = name.endsWith(".xml") ? name : name+".xml";
         Predicate<CacheEntry> filter = e->
         {
@@ -175,7 +207,14 @@ public class ResourceXML
             if (!eFileName.endsWith(".xml")) eFileName=eFileName+".xml";
             return eFileName.equalsIgnoreCase(fileName);
         };
-        return getEntry(clazz, filter).metadata;
+        try {
+            CacheEntry entry = getEntry(clazz, filter);
+            ResourceConstants.ON_METADATA_FOUND.invokeEvent(new ResourceConstants.LookupEvent(clazz, fileName, entry));
+            return entry.metadata;
+        } catch (IllegalArgumentException e) {
+            ResourceConstants.ON_METADATA_NOT_FOUND.invokeEvent(new ResourceConstants.ClassNameEvent(clazz, fileName));
+            throw e;
+        }
     }
     public Collection<XMLMetadata> getMetadata(Class<?> clazz)
     {
@@ -226,8 +265,11 @@ public class ResourceXML
 
     public String reference(Class<?> clazz, Object obj)
     {
+        ResourceConstants.ON_REFERENCE_REQUESTED.invokeEvent(new ResourceConstants.ClassEvent(clazz));
         CacheEntry entry = getEntry(clazz, e->e.isObject(obj));
-        return entry.metadata.absPath().getFileName().toString();
+        String fileName = entry.metadata.absPath().getFileName().toString();
+        ResourceConstants.ON_REFERENCE_RESOLVED.invokeEvent(new ResourceConstants.ReferenceEvent(clazz, obj, fileName));
+        return fileName;
     }
 
 
