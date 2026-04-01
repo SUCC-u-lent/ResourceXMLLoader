@@ -84,8 +84,6 @@ public class ResourceXML
                 this.handlers.toArray(XMLFieldHandler[]::new),
                 builder.settings == null ? null : builder.settings.level()
         );
-
-        this.reload();
     }
 
     /**
