@@ -279,11 +279,20 @@ public class ResourceXML
         { this.handlers.add(handler); return this; }
         public Builder addHandlers(XMLFieldHandler... handlers)
         { this.handlers.addAll(Arrays.stream(handlers).toList()); return this; }
+        public Builder addHandlers(Provider<XMLFieldHandler[]> handlers)
+        { return this.addHandlers(handlers.get()); }
         public Builder addClass(Class<?> clazz)
         { this.classes.add(clazz); return this; }
         public Builder addClasses(Class<?>... classes)
         { this.classes.addAll(Arrays.stream(classes).toList()); return this;  }
+        public Builder addClasses(Provider<Class<?>[]> provider)
+        { return this.addClasses(provider.get()); }
         public ResourceXML build()
         { return new ResourceXML(this); }
+    }
+    @FunctionalInterface
+    public interface Provider<T>
+    {
+        T get();
     }
 }
