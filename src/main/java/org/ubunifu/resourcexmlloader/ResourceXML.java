@@ -192,7 +192,7 @@ public class ResourceXML
     }
     public Collection<Object> get(Class<?> clazz)
     {
-        return getEntries(clazz, (_) -> true).stream()
+        return getEntries(clazz, (e) -> true).stream()
                 .map(e->e.weakData.get())
                 .filter(Objects::nonNull)
                 .toList();
@@ -218,7 +218,7 @@ public class ResourceXML
     }
     public Collection<XMLMetadata> getMetadata(Class<?> clazz)
     {
-        return getEntries(clazz, (_) -> true).stream()
+        return getEntries(clazz, (e) -> true).stream()
                 .map(e->e.metadata)
                 .toList();
     }
