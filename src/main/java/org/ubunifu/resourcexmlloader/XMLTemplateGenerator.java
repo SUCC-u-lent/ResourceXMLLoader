@@ -172,7 +172,7 @@ public class XMLTemplateGenerator {
     {
         logDebug("Writing template fields for class={} to path={}", clazz.getName(), path.toAbsolutePath());
         Field[] fields = Arrays.stream(getFields(clazz))
-                .filter(f-> !Modifier.isStatic(f.getModifiers()) && !Modifier.isFinal(f.getModifiers()) && !f.isAnnotationPresent(XMLExcludeField.class))
+                .filter(f-> !Modifier.isStatic(f.getModifiers()) && !f.isAnnotationPresent(XMLExcludeField.class))
                 .toArray(Field[]::new);
         logDebug("Detected {} writable field(s) for class={}", fields.length, clazz.getName());
         for (Field field : fields) {

@@ -327,7 +327,7 @@ public class XMLLoader {
             if (!clazz.getName().equals(typeAttr)) throw new IllegalStateException(String.format("Root element 'type' attribute '%s' does not match expected class '%s'. File: %s", typeAttr, clazz.getName(), file));
 
             Field[] fields = Arrays.stream(getFields(clazz))
-                    .filter(f -> !Modifier.isStatic(f.getModifiers()) && !Modifier.isFinal(f.getModifiers()))
+                    .filter(f -> !Modifier.isStatic(f.getModifiers()))
                     .filter(f -> !f.isAnnotationPresent(XMLExcludeField.class))
                     .toArray(Field[]::new);
 
