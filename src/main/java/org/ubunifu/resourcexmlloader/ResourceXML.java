@@ -67,6 +67,7 @@ public class ResourceXML
     Set<Class<?>> classes;
     Set<XMLFieldHandler> handlers;
     Map<String,Set<CacheEntry>> cache = new HashMap<>();
+    private boolean isInitializing, hasLoaded;
     ResourceXML(Builder builder)
     {
         this.handlers = builder.handlers;
@@ -92,15 +93,18 @@ public class ResourceXML
      */
     public void reload()
     {
+        if (this.isInitializing) return; // Prevent recursive reload during initialization
+        this.isInitializing = true;
         this.flush();
         this.register();
+        this.isInitializing = false;
     }
 
     /**
      * Flushes the internal cache to free up resources.
      */
     public void flush()
-    { this.cache.clear(); }
+    { this.cache.clear(); this.hasLoaded = false; }
 
     /**
      * Adds a new class to the loader, this will trigger a {@link ResourceXML#reload()}
@@ -110,6 +114,8 @@ public class ResourceXML
     { this.classes.add(clazz); this.reload(); }
     private void register()
     {
+        if (hasLoaded) return;
+        hasLoaded = true;
         Class<?> searchClass = classes.stream().findFirst().orElseThrow();
         Path path = getResourcePath(searchClass);
         if (!path.toFile().exists()) {
