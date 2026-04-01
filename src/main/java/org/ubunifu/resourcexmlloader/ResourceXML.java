@@ -241,8 +241,8 @@ public class ResourceXML
         Set<Class<?>> classes = new HashSet<>();
         public Builder setSettings(XMLReader.LoaderSettings settings)
         { this.settings = settings; return this; }
-        public Builder useDefaultHandlers(boolean useDefaultHandlers)
-        { this.useDefaultHandlers = useDefaultHandlers; return this; }
+        public Builder useDefaultHandlers()
+        { this.useDefaultHandlers =  true; return this; }
         public Builder addHandler(XMLFieldHandler handler)
         { this.handlers.add(handler); return this; }
         public Builder addHandlers(XMLFieldHandler... handlers)
