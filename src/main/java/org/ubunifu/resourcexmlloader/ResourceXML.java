@@ -9,6 +9,7 @@ import org.xml.sax.SAXException;
 import javax.xml.parsers.ParserConfigurationException;
 import java.io.File;
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Path;
 import java.util.*;
@@ -42,8 +43,14 @@ public class ResourceXML
     }
     public record CacheEntry(
             XMLMetadata metadata,
-            Object data
-    ){}
+            WeakReference<Object> weakData,
+            int hc
+    )
+    {
+        public boolean isObject(Object obj) {
+            return obj.hashCode() == this.hc();
+        }
+    }
     private void writeLog(Level level, String text, Object... args)
     {
         if (loaderSettings.level() == null) return;
@@ -129,7 +136,8 @@ public class ResourceXML
                 writeLog(Level.ERROR,"Failed to read file %s, skipping. Error: %s%n", file.getName(), e.getMessage());
                 throw new RuntimeException(e);
             }
-            CacheEntry entry = new CacheEntry(metadata, data);
+            if (data == null) throw new IllegalArgumentException("Failed to read file "+file.getName()+", the data was null");
+            CacheEntry entry = new CacheEntry(metadata, new WeakReference<>(data),data.hashCode());
             Set<CacheEntry> existingEntries = this.cache.getOrDefault(fileClazz.getName(), new HashSet<>());
             existingEntries.add(entry);
             this.cache.put(fileClazz.getName(), existingEntries);
@@ -145,12 +153,13 @@ public class ResourceXML
             if (!eFileName.endsWith(".xml")) eFileName=eFileName+".xml";
             return eFileName.equalsIgnoreCase(fileName);
         };
-        return getEntry(clazz, filter).data;
+        return getEntry(clazz, filter).weakData.get();
     }
     public Collection<Object> get(Class<?> clazz)
     {
         return getEntries(clazz, (_) -> true).stream()
-                .map(e->e.data)
+                .map(e->e.weakData.get())
+                .filter(Objects::nonNull)
                 .toList();
     }
     public XMLMetadata getMetadata(Class<?> clazz, String name)
@@ -209,6 +218,12 @@ public class ResourceXML
                 })
                 .filter(Objects::nonNull)
                 .toList();
+    }
+
+    public String reference(Class<?> clazz, Object obj)
+    {
+        CacheEntry entry = getEntry(clazz, e->e.isObject(obj));
+        return entry.metadata.absPath().getFileName().toString();
     }
 
 
