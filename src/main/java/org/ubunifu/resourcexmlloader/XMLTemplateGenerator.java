@@ -87,7 +87,7 @@ public class XMLTemplateGenerator {
         }
     }
     public void generateTemplate(Class<?> clazz, Path path) throws IOException, ParserConfigurationException, TransformerException {
-        Path resourcePath = getResourcePath(clazz).toAbsolutePath().normalize();
+        Path resourcePath = ResourceXML.getResourcePath(clazz).toAbsolutePath().normalize();
         Path outputPath = path.isAbsolute() ? path.toAbsolutePath().normalize() : resourcePath.resolve(path).normalize();
         logInfo("Generating template from Path for class={} requestedPath={} resolvedPath={}", clazz.getName(), path, outputPath);
 
@@ -102,30 +102,6 @@ public class XMLTemplateGenerator {
         logDebug("Resolved template generation target dataPath={} fileName={} for class={}", dataPath, fileName, clazz.getName());
         generateTemplate(clazz, dataPath, fileName);
     }
-
-
-    private static boolean isCompiled(Class<?> clazz)
-    {
-        try
-        {
-            String location = clazz
-                    .getProtectionDomain()
-                    .getCodeSource()
-                    .getLocation()
-                    .getPath();
-
-            return location.endsWith(".jar");
-        }
-        catch (Exception ignored) {}
-        return false;
-    }
-    private static Path getResourcePath(Class<?> clazz)
-    {
-        if (isCompiled(clazz))
-            return Path.of("resources");
-        else
-            return Path.of("src/main/resources");
-    }
     public void generateTemplate(Class<?> clazz) throws IOException, ParserConfigurationException, TransformerException {
         String dataPath;
         if (clazz.isAnnotationPresent(XMLDataPath.class))
@@ -138,7 +114,7 @@ public class XMLTemplateGenerator {
     @SuppressWarnings("ResultOfMethodCallIgnored")
     public void generateTemplate(Class<?> clazz, String path, String fileName) throws IOException, ParserConfigurationException, TransformerException {
         if (!fileName.endsWith(".xml")) fileName = fileName + ".xml";
-        Path resourcePath = getResourcePath(clazz);
+        Path resourcePath = ResourceXML.getResourcePath(clazz);
         Path targetDirectory = path == null || path.isBlank() ? resourcePath : resourcePath.resolve(path);
         Path fullPath = targetDirectory.resolve(fileName).normalize();
         logInfo("Generating template for class={} at {}", clazz.getName(), fullPath.toAbsolutePath());
