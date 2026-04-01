@@ -153,6 +153,23 @@ public class ResourceXML
                 .map(e->e.data)
                 .toList();
     }
+    public XMLMetadata getMetadata(Class<?> clazz, String name)
+    {
+        String fileName = name.endsWith(".xml") ? name : name+".xml";
+        Predicate<CacheEntry> filter = e->
+        {
+            String eFileName = e.metadata.absPath().getFileName().toString();
+            if (!eFileName.endsWith(".xml")) eFileName=eFileName+".xml";
+            return eFileName.equalsIgnoreCase(fileName);
+        };
+        return getEntry(clazz, filter).metadata;
+    }
+    public Collection<XMLMetadata> getMetadata(Class<?> clazz)
+    {
+        return getEntries(clazz, (_) -> true).stream()
+                .map(e->e.metadata)
+                .toList();
+    }
     public <T> T getAs(Class<?> clazz, String name)
     {
         Object data = get(clazz,name);
