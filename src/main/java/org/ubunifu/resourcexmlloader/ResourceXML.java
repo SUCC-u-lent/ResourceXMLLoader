@@ -277,7 +277,7 @@ public class ResourceXML
     private CacheEntry getEntry(Class<?> clazz, Predicate<CacheEntry> filter)
     {
         Set<CacheEntry> entries = getEntries(clazz, filter);
-        if (entries.isEmpty()) throw new IllegalArgumentException("No entries found for class "+clazz.getName()+" with the provided filter");
+        if (entries.isEmpty()) return null;
         if (entries.size() > 1) writeLog(Level.WARN,"Multiple entries found for class %s the first one will be selected");
         return entries.stream().findFirst().orElseThrow();
     }
@@ -285,7 +285,7 @@ public class ResourceXML
     {
         if (this.cache.isEmpty()) throw new IllegalStateException("Cache is in an invalid state! Run `reload` to regenerate the cache");
         Set<CacheEntry> entries = this.cache.get(clazz.getName());
-        if (entries == null) throw new IllegalArgumentException("No entries found for class "+clazz.getName());
+        if (entries == null) return new HashSet<>();
         return entries.stream().filter(filter).collect(Collectors.toSet());
     }
 
