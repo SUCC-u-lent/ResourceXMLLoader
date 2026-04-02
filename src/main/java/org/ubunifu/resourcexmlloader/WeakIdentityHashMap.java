@@ -2,6 +2,7 @@ package org.ubunifu.resourcexmlloader;
 
 import java.lang.ref.WeakReference;
 import java.util.*;
+import java.util.function.Function;
 
 class WeakIdentityHashMap<K, V> {
     private final Map<IdentityWeakReference<K>, V> internalMap = new HashMap<>();
@@ -26,6 +27,15 @@ class WeakIdentityHashMap<K, V> {
     public Set<Map.Entry<IdentityWeakReference<K>,V>> entrySet()
     {
         return internalMap.entrySet();
+    }
+
+    public V computeIfAbsent(K key,
+                                    Function<IdentityWeakReference<? super K>, ? extends V> mappingFunction) {
+        return internalMap.computeIfAbsent(new IdentityWeakReference<>(key),mappingFunction);
+    }
+
+    public void clear() {
+        this.internalMap.clear();
     }
 
     public static class IdentityWeakReference<T> extends WeakReference<T> {

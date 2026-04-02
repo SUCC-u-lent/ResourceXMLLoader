@@ -79,36 +79,6 @@ public class PrimitiveHandler implements XMLFieldHandler
         }
     }
 
-    @Override
-    public Object decompileField(Class<?> clazz, Document document, Element root, Element fieldElement, Class<?> fieldClass, Field field) {
-        logDebug("PrimitiveHandler decompile class={} field={} type={}", clazz.getName(), field.getName(), fieldClass.getName());
-        if (fieldClass.isArray())
-        {
-            Element[] children = getChildren(fieldElement);
-            logDebug("Decompiling primitive array with {} element(s) for field={}", children.length, field.getName());
-            Object array = Array.newInstance(fieldClass.getComponentType(), children.length);
-            for (int i = 0; i < children.length; i++) {
-                Element child = children[i];
-                Array.set(array, i, decompField(child, fieldClass.getComponentType()));
-            }
-            return array;
-        }
-        return decompField(fieldElement, fieldClass);
-    }
-
-    private Element[] getChildren(Element element)
-    {
-        NodeList children = element.getChildNodes();
-        List<Element> childElements = new ArrayList<>();
-        for (int i = 0; i < children.getLength(); i++) {
-            Node node = children.item(i);
-            if (node instanceof Element e) {
-                childElements.add(e);
-            }
-        }
-        return childElements.toArray(Element[]::new);
-    }
-
     private Object getDefaultValue(Class<?> fieldClass)
     {
         if (fieldClass.equals(String.class)) {
@@ -129,35 +99,6 @@ public class PrimitiveHandler implements XMLFieldHandler
             return false;
         } else if (fieldClass.equals(Character.class) || fieldClass.equals(char.class)) {
             return 'c';
-        }
-        throw new IllegalArgumentException("Unsupported field type: " + fieldClass.getName());
-    }
-    private Object decompField(Element fieldElement, Class<?> fieldClass)
-    {
-        String value = fieldElement.getAttribute("value");
-        logDebug("Decompiling primitive value type={} rawValue={}", fieldClass.getName(), value);
-        if (fieldClass.equals(String.class)) {
-            return value;
-        } else if (fieldClass.equals(Integer.class) || fieldClass.equals(int.class)) {
-            return Integer.parseInt(value);
-        } else if (fieldClass.equals(Double.class) || fieldClass.equals(double.class)) {
-            return Double.parseDouble(value);
-        } else if (fieldClass.equals(Float.class) || fieldClass.equals(float.class)) {
-            return Float.parseFloat(value);
-        } else if (fieldClass.equals(Long.class) || fieldClass.equals(long.class)) {
-            return Long.parseLong(value);
-        } else if (fieldClass.equals(Short.class) || fieldClass.equals(short.class)) {
-            return Short.parseShort(value);
-        } else if (fieldClass.equals(Byte.class) || fieldClass.equals(byte.class)) {
-            return Byte.parseByte(value);
-        } else if (fieldClass.equals(Boolean.class) || fieldClass.equals(boolean.class)) {
-            return Boolean.parseBoolean(value);
-        } else if (fieldClass.equals(Character.class) || fieldClass.equals(char.class)) {
-            if (value.length() != 1) {
-                logWarn("Invalid character value encountered: {}", value);
-                throw new IllegalArgumentException("Invalid character value: " + value);
-            }
-            return value.charAt(0);
         }
         throw new IllegalArgumentException("Unsupported field type: " + fieldClass.getName());
     }

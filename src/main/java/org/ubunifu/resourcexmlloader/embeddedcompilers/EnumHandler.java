@@ -53,28 +53,4 @@ public class EnumHandler implements XMLFieldHandler
             fieldElement.setAttribute("value", String.join(", ", Arrays.stream(enums).map(Enum::name).toArray(String[]::new)));
         }
     }
-
-    @Override
-    public Object decompileField(Class<?> clazz, Document document, Element root, Element fieldElement, Class<?> fieldClass, Field field) {
-        logDebug("EnumHandler decompile class={} field={} type={} isArray={}", clazz.getName(), field.getName(), fieldClass.getName(), fieldClass.isArray());
-        if (fieldClass.isArray())
-        {
-            NodeList enumElements = fieldElement.getElementsByTagName("enum");
-            @SuppressWarnings("rawtypes") Class<? extends Enum> enumType = fieldClass.getComponentType().asSubclass(Enum.class);
-            Enum<?>[] enums = (Enum<?>[]) java.lang.reflect.Array.newInstance(fieldClass.getComponentType(), enumElements.getLength());
-            logDebug("Decompiling enum array for field={} with {} item(s)", field.getName(), enumElements.getLength());
-            for (int i = 0; i < enumElements.getLength(); i++) {
-                Element enumElement = (Element) enumElements.item(i);
-                String value = enumElement.getAttribute("value");
-                @SuppressWarnings({"rawtypes", "unchecked"}) Enum<?> enumValue = Enum.valueOf((Class) enumType, value);
-                enums[i] = enumValue;
-            }
-            return enums;
-        } else
-        {
-            String value = fieldElement.getAttribute("value");
-            logDebug("Decompiling single enum for field={} rawValue={}", field.getName(), value);
-            return Enum.valueOf(fieldClass.asSubclass(Enum.class), value);
-        }
-    }
 }

@@ -17,6 +17,4 @@ public interface XMLFieldHandler
     }
 
     void handleTemplateField(Class<?> clazz, Document document, Element rootElement, Element fieldElement, Class<?> fieldClass, Field field);
-
-    Object decompileField(Class<?> clazz, Document document, Element root, Element fieldElement, Class<?> fieldClass, Field field);
 }
