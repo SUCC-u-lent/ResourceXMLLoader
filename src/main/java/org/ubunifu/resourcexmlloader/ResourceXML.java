@@ -183,6 +183,7 @@ public class ResourceXML
         };
         try {
             CacheEntry entry = getEntry(clazz, filter);
+            if (entry == null) return null;
             ResourceConstants.ON_RESOURCE_FOUND.invokeEvent(new ResourceConstants.LookupEvent(clazz, fileName, entry));
             return entry.weakData.get();
         } catch (IllegalArgumentException e) {
